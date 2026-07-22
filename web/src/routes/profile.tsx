@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { TwoFactorSection } from '@/components/two-factor-section';
 
 const schema = z.object({
   first_name: z.string().min(1, 'Required'),
@@ -64,6 +65,8 @@ export function ProfilePage() {
           </div>
         </form>
       </Card>
+
+      <TwoFactorSection />
     </div>
   );
 }
