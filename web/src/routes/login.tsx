@@ -91,10 +91,10 @@ export function LoginPage() {
   const done = signupSent || resetSent;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper px-5">
-      <Card className="w-full max-w-sm p-6">
+    <div className="flex min-h-screen items-center justify-center px-5">
+      <Card className="w-full max-w-sm p-6 shadow-2xl">
         <div className="mb-5 flex items-center gap-2.5 font-bold">
-          <span className="grid h-6.5 w-6.5 place-items-center rounded-md bg-accent text-xs text-white">SD</span>
+          <span className="btn-gradient-accent grid h-6.5 w-6.5 place-items-center rounded-lg text-xs text-white shadow-[0_4px_12px_-4px_rgba(var(--shadow-tint),0.6)]">SD</span>
           SafeDrive
         </div>
 

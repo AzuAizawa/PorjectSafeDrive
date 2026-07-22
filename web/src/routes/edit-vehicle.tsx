@@ -232,7 +232,7 @@ export function EditVehiclePage() {
             </div>
             {data.images.length < 4 ? (
               <>
-                <label className="mt-2 block cursor-pointer rounded-md border-2 border-dashed border-line bg-surface-2 p-4 text-center text-xs font-semibold text-muted hover:border-accent hover:text-accent">
+                <label className="mt-2 block cursor-pointer rounded-xl border-2 border-dashed border-line bg-surface-2/70 p-4 text-center text-xs font-semibold text-muted backdrop-blur-sm hover:border-accent hover:text-accent hover:bg-accent-soft/40 hover:-translate-y-px hover:shadow-[0_8px_20px_-12px_rgba(var(--shadow-tint),0.4)]">
                   {newImages.length > 0 ? `📷 ${newImages.length} photo${newImages.length > 1 ? 's' : ''} selected` : '📤 Click to upload — JPG/PNG only'}
                   <input
                     type="file"

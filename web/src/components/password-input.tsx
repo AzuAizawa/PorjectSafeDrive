@@ -30,7 +30,7 @@ export function PasswordInput({ value, onChange, label = 'Password', showCheckli
           type={visible ? 'text' : 'password'}
           required
           minLength={8}
-          className="h-[38px] w-full rounded-md border border-line bg-surface px-3 pr-10"
+          className="input-base pr-10"
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />

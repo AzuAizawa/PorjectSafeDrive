@@ -90,13 +90,13 @@ export function BrowsePage() {
       <Card className="mb-4.5 p-5">
         <div className="flex flex-wrap items-center gap-2.5">
           <input
-            className="h-[38px] min-w-[200px] flex-1 rounded-md border border-line bg-surface px-3"
+            className="input-base min-w-[200px] flex-1"
             placeholder="Search brand, model, or location…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <select
-            className="h-[38px] w-40 rounded-md border border-line bg-surface px-3"
+            className="input-base w-40"
             value={bodyType}
             onChange={(e) => setBodyType(e.target.value as BodyType | '')}
           >
@@ -108,13 +108,13 @@ export function BrowsePage() {
           </select>
           <input
             type="date"
-            className="h-[38px] w-[150px] rounded-md border border-line bg-surface px-3"
+            className="input-base w-[150px]"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
           />
           <input
             type="date"
-            className="h-[38px] w-[150px] rounded-md border border-line bg-surface px-3"
+            className="input-base w-[150px]"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
           />
@@ -136,7 +136,7 @@ export function BrowsePage() {
           <Link
             key={v.id}
             to={`/cars/${v.id}`}
-            className="block overflow-hidden rounded-2xl border border-line bg-surface shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+            className="glass block overflow-hidden rounded-2xl border border-line/70 shadow-[0_1px_2px_rgba(20,25,26,0.05),0_12px_28px_-20px_rgba(var(--shadow-tint),0.3)] hover:-translate-y-1 hover:shadow-[0_1px_2px_rgba(20,25,26,0.08),0_24px_48px_-20px_rgba(var(--shadow-tint),0.45)]"
           >
             <div className="h-[150px] bg-surface-2">
               {v.cover_image_url ? (

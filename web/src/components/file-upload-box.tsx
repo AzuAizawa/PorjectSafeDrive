@@ -31,7 +31,7 @@ export function FileUploadBox({ label, accept, allowedTypes, hint, file, onSelec
   return (
     <div>
       <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted">{label}</p>
-      <label className="block cursor-pointer rounded-md border-2 border-dashed border-line bg-surface-2 p-4 text-center text-xs font-semibold text-muted hover:border-accent hover:text-accent">
+      <label className="block cursor-pointer rounded-xl border-2 border-dashed border-line bg-surface-2/70 p-4 text-center text-xs font-semibold text-muted backdrop-blur-sm hover:border-accent hover:text-accent hover:bg-accent-soft/40 hover:-translate-y-px hover:shadow-[0_8px_20px_-12px_rgba(var(--shadow-tint),0.4)]">
         {file ? `📄 ${file.name}` : `📤 Click to upload — ${hint}`}
         <input
           type="file"

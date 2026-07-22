@@ -54,9 +54,9 @@ export function AppShell() {
 
   return (
     <div className="grid min-h-screen grid-cols-[232px_1fr] grid-rows-[56px_1fr]">
-      <header className="sticky top-0 z-40 col-span-2 row-start-1 flex items-center justify-between border-b border-line bg-surface px-5">
+      <header className="glass sticky top-0 z-40 col-span-2 row-start-1 flex items-center justify-between border-b border-line/70 px-5">
         <div className="flex items-center gap-2.5 font-bold text-base">
-          <span className="grid h-6.5 w-6.5 place-items-center rounded-md bg-accent text-xs text-white">SD</span>
+          <span className="btn-gradient-accent grid h-6.5 w-6.5 place-items-center rounded-lg text-xs text-white shadow-[0_4px_12px_-4px_rgba(var(--shadow-tint),0.6)]">SD</span>
           SafeDrive
         </div>
 
@@ -67,7 +67,7 @@ export function AppShell() {
               to="/inquire"
               className={({ isActive }) =>
                 cn(
-                  'grid h-8.5 w-8.5 place-items-center rounded-full border border-line bg-surface text-base',
+                  'grid h-8.5 w-8.5 place-items-center rounded-full border border-line bg-surface/80 text-base hover:-translate-y-px hover:shadow-md',
                   isActive && 'border-accent bg-accent-soft'
                 )
               }
@@ -78,13 +78,13 @@ export function AppShell() {
             </NavLink>
             <div className="relative">
             <button
-              className="grid h-8.5 w-8.5 place-items-center rounded-full border border-line bg-accent-soft text-xs font-bold text-accent-strong"
+              className="btn-gradient-accent grid h-8.5 w-8.5 place-items-center rounded-full text-xs font-bold text-white shadow-[0_4px_12px_-4px_rgba(var(--shadow-tint),0.6)] hover:-translate-y-px"
               onClick={() => setMenuOpen((o) => !o)}
             >
               {profile?.first_name?.[0] ?? profile?.email?.[0]?.toUpperCase() ?? '·'}
             </button>
             {menuOpen ? (
-              <div className="absolute right-0 top-11 z-50 w-52 rounded-md border border-line bg-surface p-1.5 shadow-lg">
+              <div className="glass animate-[dropdown-in_160ms_cubic-bezier(0.22,1,0.36,1)] absolute right-0 top-11 z-50 w-52 rounded-xl border border-line/70 p-1.5 shadow-xl">
                 <NavLink
                   to="/profile"
                   className="block rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"
@@ -127,7 +127,7 @@ export function AppShell() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <button
-              className="rounded-full border border-line bg-accent-soft px-3 py-1 text-xs font-bold text-accent-strong"
+              className="rounded-full border border-line bg-accent-soft px-3 py-1 text-xs font-bold text-accent-strong hover:-translate-y-px hover:shadow-md"
               onClick={() => supabase.auth.signOut()}
             >
               Log out
@@ -136,7 +136,7 @@ export function AppShell() {
         )}
       </header>
 
-      <aside className="sticky top-14 row-start-2 h-[calc(100vh-56px)] overflow-y-auto border-r border-line bg-surface p-3">
+      <aside className="glass sticky top-14 row-start-2 h-[calc(100vh-56px)] overflow-y-auto border-r border-line/70 p-3">
         <nav className="flex flex-col gap-0.5">
           {nav.map((item) => (
             <NavLink
@@ -145,8 +145,9 @@ export function AppShell() {
               end={item.to === '/admin'}
               className={({ isActive }) =>
                 cn(
-                  'rounded-md px-2.5 py-2 text-[13.5px] font-semibold text-muted hover:bg-surface-2 hover:text-ink',
-                  isActive && 'bg-accent-soft text-accent-strong'
+                  'relative rounded-lg px-2.5 py-2 text-[13.5px] font-semibold text-muted hover:bg-surface-2 hover:text-ink',
+                  isActive &&
+                    'bg-accent-soft text-accent-strong before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-full before:bg-accent'
                 )
               }
             >
