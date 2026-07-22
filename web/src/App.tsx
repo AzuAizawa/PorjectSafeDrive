@@ -25,6 +25,7 @@ import { InquirePage } from '@/routes/inquire';
 import { HelpPage } from '@/routes/help';
 import { AdminCompanyInfoPage } from '@/routes/admin/company-info';
 import { AdminInquiriesPage } from '@/routes/admin/inquiries';
+import { PrivacyPage } from '@/routes/privacy';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -54,6 +55,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
 
       <Route
         element={

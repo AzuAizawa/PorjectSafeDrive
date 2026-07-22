@@ -19,6 +19,7 @@ export function LoginPage() {
   const [resetSent, setResetSent] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   async function handleMfaSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,6 +52,10 @@ export function LoginPage() {
     }
     if (mode === 'signup' && !passwordMeetsRules(password)) {
       setError('Password does not meet all the requirements below.');
+      return;
+    }
+    if (mode === 'signup' && !agreedToTerms) {
+      setError('Please agree to the Terms of Service and Data Privacy Notice to continue.');
       return;
     }
 
@@ -163,9 +168,27 @@ export function LoginPage() {
               </button>
             ) : null}
 
+            {mode === 'signup' ? (
+              <label className="flex items-start gap-2 text-xs text-muted">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                />
+                <span>
+                  I agree to the Terms of Service and{' '}
+                  <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-accent hover:underline">
+                    Data Privacy Notice
+                  </a>
+                  , and consent to SafeDrive processing my identity documents for verification.
+                </span>
+              </label>
+            ) : null}
+
             {error ? <p className="text-sm text-bad">{error}</p> : null}
 
-            <Button type="submit" block disabled={submitting}>
+            <Button type="submit" block disabled={submitting || (mode === 'signup' && !agreedToTerms)}>
               {submitting ? 'Please wait…' : mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Sign Up' : 'Send Reset Link'}
             </Button>
           </form>

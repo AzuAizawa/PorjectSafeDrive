@@ -61,6 +61,7 @@ export function VerifyPage() {
   const [documents, setDocuments] = useState<Record<string, File | null>>({});
   const [selfieWithId, setSelfieWithId] = useState<File | null>(null);
   const [selfieFace, setSelfieFace] = useState<File | null>(null);
+  const [consentGiven, setConsentGiven] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: latest } = useQuery({
@@ -79,6 +80,7 @@ export function VerifyPage() {
       if (missingDocs.length > 0) throw new Error(`Missing: ${missingDocs.map((f) => f.label).join(', ')}`);
       if (!selfieWithId) throw new Error('Missing: Selfie holding ID');
       if (!selfieFace) throw new Error('Missing: Selfie (face only)');
+      if (!consentGiven) throw new Error('Please confirm you consent to processing your ID documents and selfies.');
 
       const paths: Record<string, string> = {};
       for (const field of DOCUMENT_FIELDS) {
@@ -202,10 +204,27 @@ export function VerifyPage() {
             </div>
           </div>
 
+          <label className="flex items-start gap-2 text-xs text-muted">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0"
+              checked={consentGiven}
+              onChange={(e) => setConsentGiven(e.target.checked)}
+            />
+            <span>
+              I consent to SafeDrive collecting and processing my ID documents and selfie photos for identity
+              verification, per the{' '}
+              <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-accent hover:underline">
+                Data Privacy Notice
+              </a>
+              .
+            </span>
+          </label>
+
           {error ? <p className="text-sm text-bad">{error}</p> : null}
 
           <div className="flex justify-end">
-            <Button type="submit" disabled={submit.isPending}>
+            <Button type="submit" disabled={submit.isPending || !consentGiven}>
               {submit.isPending ? 'Submitting…' : 'Submit for Verification'}
             </Button>
           </div>
