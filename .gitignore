@@ -1,0 +1,16 @@
+# Local tooling config, not project code
+.claude/
+
+# Node
+web/node_modules/
+web/dist/
+web/dist-ssr/
+
+# Env files (never commit real credentials)
+*.local
+.env
+.env.*
+!.env.example
+
+# OS/editor
+.DS_Store
