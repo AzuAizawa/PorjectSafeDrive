@@ -3,12 +3,15 @@ import { useAuth } from '@/lib/auth-context';
 import { AppShell } from '@/components/layout/AppShell';
 import { ComingSoon } from '@/components/layout/ComingSoon';
 import { LoginPage } from '@/routes/login';
+import { ResetPasswordPage } from '@/routes/reset-password';
 import { BrowsePage } from '@/routes/browse';
 import { CarDetailPage } from '@/routes/car-detail';
 import { MyBookingsPage } from '@/routes/my-bookings';
 import { VerifyPage } from '@/routes/verify';
+import { ProfilePage } from '@/routes/profile';
 import { MyVehiclesPage } from '@/routes/my-vehicles';
 import { AddVehiclePage } from '@/routes/add-vehicle';
+import { EditVehiclePage } from '@/routes/edit-vehicle';
 import { BookingsReceivedPage } from '@/routes/bookings-received';
 import { AdminUsersPage } from '@/routes/admin/users';
 import { AdminVehiclesPage } from '@/routes/admin/vehicles';
@@ -30,6 +33,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route
         element={
@@ -43,9 +47,11 @@ export default function App() {
         <Route path="cars/:id" element={<CarDetailPage />} />
         <Route path="bookings" element={<MyBookingsPage />} />
         <Route path="verify" element={<VerifyPage />} />
+        <Route path="profile" element={<ProfilePage />} />
 
         <Route path="my-vehicles" element={<MyVehiclesPage />} />
         <Route path="my-vehicles/new" element={<AddVehiclePage />} />
+        <Route path="my-vehicles/:id/edit" element={<EditVehiclePage />} />
         <Route path="bookings-received" element={<BookingsReceivedPage />} />
 
         <Route

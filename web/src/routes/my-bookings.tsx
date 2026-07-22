@@ -4,7 +4,9 @@ import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BookingStatusPill } from '@/components/ui/pill';
+import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { previewCancellation } from '@/lib/cancellation';
 import type { Booking, CarModel, CarBrand } from '@/lib/database.types';
 
 type BookingRow = Booking & { vehicle: { plate_number: string; model: CarModel & { brand: CarBrand } } };
@@ -19,15 +21,29 @@ async function fetchMyBookings(renterId: string): Promise<BookingRow[]> {
   return data as any;
 }
 
+async function fetchCancellationSettings() {
+  const { data, error } = await supabase
+    .from('platform_settings')
+    .select('key, value')
+    .in('key', ['free_cancel_hours', 'cancellation_fee_percent']);
+  if (error) throw error;
+  return Object.fromEntries(data.map((s) => [s.key, Number(s.value)])) as {
+    free_cancel_hours: number;
+    cancellation_fee_percent: number;
+  };
+}
+
 export function MyBookingsPage() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
+  const cancelDialog = useConfirmTarget<string>();
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings', 'mine', profile?.id],
     queryFn: () => fetchMyBookings(profile!.id),
     enabled: !!profile,
   });
+  const { data: settings } = useQuery({ queryKey: ['cancellation-settings'], queryFn: fetchCancellationSettings });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bookings'] });
 
@@ -36,7 +52,10 @@ export function MyBookingsPage() {
       const { error } = await supabase.rpc('cancel_booking', { p_booking_id: bookingId });
       if (error) throw error;
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      cancelDialog.close();
+    },
   });
   const markComplete = useMutation({
     mutationFn: async (bookingId: string) => {
@@ -60,6 +79,9 @@ export function MyBookingsPage() {
   });
 
   if (isLoading) return <p className="text-muted">Loading…</p>;
+
+  const targetBooking = bookings?.find((b) => b.id === cancelDialog.target);
+  const preview = targetBooking && settings ? previewCancellation(targetBooking, settings) : null;
 
   return (
     <div>
@@ -112,7 +134,7 @@ export function MyBookingsPage() {
                   </Button>
                 ) : null}
                 {['pending_owner', 'pending_payment', 'downpayment_paid', 'fully_paid'].includes(b.status) ? (
-                  <Button variant="ghost" size="sm" onClick={() => cancel.mutate(b.id)}>
+                  <Button variant="ghost" size="sm" onClick={() => cancelDialog.open(b.id)}>
                     Cancel
                   </Button>
                 ) : null}
@@ -132,6 +154,17 @@ export function MyBookingsPage() {
           <p className="py-16 text-center text-muted">No bookings yet — go find a car on Browse.</p>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={!!cancelDialog.target}
+        title="Cancel this booking?"
+        description={preview?.message ?? 'Loading…'}
+        confirmLabel="Cancel Booking"
+        confirmVariant="danger"
+        pending={cancel.isPending}
+        onConfirm={() => cancelDialog.target && cancel.mutate(cancelDialog.target)}
+        onCancel={cancelDialog.close}
+      />
     </div>
   );
 }

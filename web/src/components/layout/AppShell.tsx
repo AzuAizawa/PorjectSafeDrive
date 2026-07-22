@@ -60,6 +60,13 @@ export function AppShell() {
             {menuOpen ? (
               <div className="absolute right-0 top-11 w-52 rounded-md border border-line bg-surface p-1.5 shadow-lg">
                 <NavLink
+                  to="/profile"
+                  className="block rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  👤 My Profile
+                </NavLink>
+                <NavLink
                   to="/verify"
                   className="block rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"
                   onClick={() => setMenuOpen(false)}

@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BookingStatusPill } from '@/components/ui/pill';
+import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Booking, CarModel, CarBrand, Profile } from '@/lib/database.types';
 
@@ -28,6 +29,8 @@ async function fetchBookingsReceived(ownerId: string): Promise<BookingRow[]> {
 export function BookingsReceivedPage() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
+  const declineDialog = useConfirmTarget<string>();
+  const noShowDialog = useConfirmTarget<string>();
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings', 'received', profile?.id],
@@ -48,10 +51,30 @@ export function BookingsReceivedPage() {
   }
 
   const accept = useRpcMutation('accept_booking');
-  const reject = useRpcMutation('reject_booking');
   const confirmHandover = useRpcMutation('confirm_handover');
-  const cancelNoShow = useRpcMutation('cancel_no_show');
   const markComplete = useRpcMutation('mark_complete');
+
+  const reject = useMutation({
+    mutationFn: async (vars: { bookingId: string; reason: string }) => {
+      const { error } = await supabase.rpc('reject_booking', { p_booking_id: vars.bookingId, p_reason: vars.reason });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate();
+      declineDialog.close();
+    },
+  });
+
+  const cancelNoShow = useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { error } = await supabase.rpc('cancel_no_show', { p_booking_id: bookingId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate();
+      noShowDialog.close();
+    },
+  });
 
   if (isLoading) return <p className="text-muted">Loading…</p>;
 
@@ -96,7 +119,7 @@ export function BookingsReceivedPage() {
               {b.status === 'pending_owner' ? (
                 <>
                   <Button size="sm" onClick={() => accept.mutate(b.id)}>Accept</Button>
-                  <Button variant="danger" size="sm" onClick={() => reject.mutate(b.id)}>Decline</Button>
+                  <Button variant="danger" size="sm" onClick={() => declineDialog.open(b.id)}>Decline</Button>
                 </>
               ) : null}
               {b.status === 'downpayment_paid' ? (
@@ -104,7 +127,7 @@ export function BookingsReceivedPage() {
                   <Button size="sm" disabled title="Balance must be paid before handover can be confirmed">
                     Confirm Handover
                   </Button>
-                  <Button variant="danger" size="sm" onClick={() => cancelNoShow.mutate(b.id)}>
+                  <Button variant="danger" size="sm" onClick={() => noShowDialog.open(b.id)}>
                     Cancel — Unpaid at Meetup
                   </Button>
                 </>
@@ -121,6 +144,30 @@ export function BookingsReceivedPage() {
 
         {bookings?.length === 0 ? <p className="py-16 text-center text-muted">No booking requests yet.</p> : null}
       </div>
+
+      <ConfirmDialog
+        open={!!declineDialog.target}
+        title="Decline this booking request?"
+        description="The renter will see your reason and won't be charged anything."
+        requireReason
+        reasonPlaceholder="e.g. Car isn't available those dates"
+        confirmLabel="Decline"
+        confirmVariant="danger"
+        pending={reject.isPending}
+        onConfirm={(reason) => declineDialog.target && reject.mutate({ bookingId: declineDialog.target, reason: reason! })}
+        onCancel={declineDialog.close}
+      />
+
+      <ConfirmDialog
+        open={!!noShowDialog.target}
+        title="Cancel this booking?"
+        description="The renter didn't pay the balance before the meetup — they'll forfeit part of the downpayment as a cancellation fee and receive a strike."
+        confirmLabel="Cancel Booking"
+        confirmVariant="danger"
+        pending={cancelNoShow.isPending}
+        onConfirm={() => noShowDialog.target && cancelNoShow.mutate(noShowDialog.target)}
+        onCancel={noShowDialog.close}
+      />
     </div>
   );
 }
