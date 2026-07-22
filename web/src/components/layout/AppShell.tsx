@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -26,9 +27,19 @@ const adminNav = [
 ];
 
 export function AppShell() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
   const isAdmin = profile?.role === 'admin';
   const nav = isAdmin ? adminNav : profile?.is_lister ? listerNav : renterNav;
+
+  async function toggleLister() {
+    if (!profile) return;
+    await supabase.from('profiles').update({ is_lister: !profile.is_lister }).eq('id', profile.id);
+    await refreshProfile();
+    setMenuOpen(false);
+    navigate(profile.is_lister ? '/browse' : '/my-vehicles');
+  }
 
   return (
     <div className="grid min-h-screen grid-cols-[232px_1fr] grid-rows-[56px_1fr]">
@@ -37,12 +48,48 @@ export function AppShell() {
           <span className="grid h-6.5 w-6.5 place-items-center rounded-md bg-accent text-xs text-white">SD</span>
           SafeDrive
         </div>
-        <button
-          className="rounded-full border border-line bg-accent-soft px-3 py-1 text-xs font-bold text-accent-strong"
-          onClick={() => supabase.auth.signOut()}
-        >
-          Log out
-        </button>
+
+        {!isAdmin ? (
+          <div className="relative">
+            <button
+              className="grid h-8.5 w-8.5 place-items-center rounded-full border border-line bg-accent-soft text-xs font-bold text-accent-strong"
+              onClick={() => setMenuOpen((o) => !o)}
+            >
+              {profile?.first_name?.[0] ?? profile?.email?.[0]?.toUpperCase() ?? '·'}
+            </button>
+            {menuOpen ? (
+              <div className="absolute right-0 top-11 w-52 rounded-md border border-line bg-surface p-1.5 shadow-lg">
+                <NavLink
+                  to="/verify"
+                  className="block rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  🪪 Get Verified
+                </NavLink>
+                <button
+                  className="block w-full rounded-md px-2.5 py-2 text-left text-[13px] font-medium hover:bg-surface-2"
+                  onClick={toggleLister}
+                >
+                  🔁 {profile?.is_lister ? 'Switch to Renter' : 'Switch to Lister'}
+                </button>
+                <hr className="my-1 border-line" />
+                <button
+                  className="block w-full rounded-md px-2.5 py-2 text-left text-[13px] font-medium hover:bg-surface-2"
+                  onClick={() => supabase.auth.signOut()}
+                >
+                  ↩ Log out
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <button
+            className="rounded-full border border-line bg-accent-soft px-3 py-1 text-xs font-bold text-accent-strong"
+            onClick={() => supabase.auth.signOut()}
+          >
+            Log out
+          </button>
+        )}
       </header>
 
       <aside className="sticky top-14 row-start-2 h-[calc(100vh-56px)] overflow-y-auto border-r border-line bg-surface p-3">
@@ -51,6 +98,7 @@ export function AppShell() {
             <NavLink
               key={item.to}
               to={item.to}
+              end={item.to === '/admin'}
               className={({ isActive }) =>
                 cn(
                   'rounded-md px-2.5 py-2 text-[13.5px] font-semibold text-muted hover:bg-surface-2 hover:text-ink',

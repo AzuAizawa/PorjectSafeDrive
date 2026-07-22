@@ -123,3 +123,9 @@ h1, h2, h3, h4 {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+@layer components {
+  .input-base {
+    @apply h-[38px] w-full rounded-md border border-line bg-surface px-3 text-ink;
+  }
+}

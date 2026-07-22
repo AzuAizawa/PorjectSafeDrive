@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { publicUrl } from '@/lib/storage';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
@@ -18,7 +19,7 @@ async function fetchVehicle(id: string): Promise<VehicleListing> {
     .single();
   if (error) throw error;
   const images = (data as any).vehicle_images?.sort((a: any, b: any) => a.sort_order - b.sort_order) ?? [];
-  return { ...(data as any), cover_image_url: images[0]?.storage_path ?? null };
+  return { ...(data as any), cover_image_url: publicUrl('car-images', images[0]?.storage_path ?? null) };
 }
 
 async function fetchSettings(): Promise<Record<string, number>> {

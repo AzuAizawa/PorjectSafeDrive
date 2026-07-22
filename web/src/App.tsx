@@ -6,6 +6,12 @@ import { LoginPage } from '@/routes/login';
 import { BrowsePage } from '@/routes/browse';
 import { CarDetailPage } from '@/routes/car-detail';
 import { MyBookingsPage } from '@/routes/my-bookings';
+import { VerifyPage } from '@/routes/verify';
+import { MyVehiclesPage } from '@/routes/my-vehicles';
+import { AddVehiclePage } from '@/routes/add-vehicle';
+import { BookingsReceivedPage } from '@/routes/bookings-received';
+import { AdminUsersPage } from '@/routes/admin/users';
+import { AdminVehiclesPage } from '@/routes/admin/vehicles';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -36,11 +42,11 @@ export default function App() {
         <Route path="browse" element={<BrowsePage />} />
         <Route path="cars/:id" element={<CarDetailPage />} />
         <Route path="bookings" element={<MyBookingsPage />} />
-        <Route path="verify" element={<ComingSoon eyebrow="Trust & Safety" title="Get Verified" />} />
+        <Route path="verify" element={<VerifyPage />} />
 
-        <Route path="my-vehicles" element={<ComingSoon eyebrow="Lister" title="My Vehicles" />} />
-        <Route path="my-vehicles/new" element={<ComingSoon eyebrow="Lister" title="Add a Vehicle" />} />
-        <Route path="bookings-received" element={<ComingSoon eyebrow="Lister" title="Bookings Received" />} />
+        <Route path="my-vehicles" element={<MyVehiclesPage />} />
+        <Route path="my-vehicles/new" element={<AddVehiclePage />} />
+        <Route path="bookings-received" element={<BookingsReceivedPage />} />
 
         <Route
           path="admin"
@@ -50,8 +56,8 @@ export default function App() {
             </RequireAdmin>
           }
         />
-        <Route path="admin/users" element={<RequireAdmin><ComingSoon eyebrow="Admin" title="Users" /></RequireAdmin>} />
-        <Route path="admin/vehicles" element={<RequireAdmin><ComingSoon eyebrow="Admin" title="Vehicle Approval" /></RequireAdmin>} />
+        <Route path="admin/users" element={<RequireAdmin><AdminUsersPage /></RequireAdmin>} />
+        <Route path="admin/vehicles" element={<RequireAdmin><AdminVehiclesPage /></RequireAdmin>} />
         <Route path="admin/catalog" element={<RequireAdmin><ComingSoon eyebrow="Admin" title="Car Catalog" /></RequireAdmin>} />
         <Route path="admin/disputes" element={<RequireAdmin><ComingSoon eyebrow="Admin" title="Disputes" /></RequireAdmin>} />
         <Route path="admin/payments" element={<RequireAdmin><ComingSoon eyebrow="Admin" title="Send Payments" /></RequireAdmin>} />

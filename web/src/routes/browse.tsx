@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { publicUrl } from '@/lib/storage';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
@@ -41,8 +42,10 @@ async function fetchVehicles(startDate: string, endDate: string): Promise<Vehicl
 
   return (data ?? []).map((row: any) => ({
     ...row,
-    cover_image_url:
-      row.vehicle_images?.sort((a: any, b: any) => a.sort_order - b.sort_order)[0]?.storage_path ?? null,
+    cover_image_url: publicUrl(
+      'car-images',
+      row.vehicle_images?.sort((a: any, b: any) => a.sort_order - b.sort_order)[0]?.storage_path ?? null
+    ),
   }));
 }
 

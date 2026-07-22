@@ -1,0 +1,126 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth-context';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { BookingStatusPill } from '@/components/ui/pill';
+import { formatCurrency, formatDate } from '@/lib/utils';
+import type { Booking, CarModel, CarBrand, Profile } from '@/lib/database.types';
+
+type BookingRow = Booking & {
+  vehicle: { plate_number: string; model: CarModel & { brand: CarBrand } };
+  renter: Pick<Profile, 'first_name' | 'last_name' | 'phone' | 'address' | 'birthday' | 'verified_status'>;
+};
+
+async function fetchBookingsReceived(ownerId: string): Promise<BookingRow[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(
+      `*, vehicle:vehicles(plate_number, model:car_models(*, brand:car_brands(*))),
+       renter:profiles!bookings_renter_id_fkey(first_name, last_name, phone, address, birthday, verified_status)`
+    )
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data as any;
+}
+
+export function BookingsReceivedPage() {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { data: bookings, isLoading } = useQuery({
+    queryKey: ['bookings', 'received', profile?.id],
+    queryFn: () => fetchBookingsReceived(profile!.id),
+    enabled: !!profile,
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bookings'] });
+
+  function useRpcMutation(fn: string) {
+    return useMutation({
+      mutationFn: async (bookingId: string) => {
+        const { error } = await supabase.rpc(fn, { p_booking_id: bookingId });
+        if (error) throw error;
+      },
+      onSuccess: invalidate,
+    });
+  }
+
+  const accept = useRpcMutation('accept_booking');
+  const reject = useRpcMutation('reject_booking');
+  const confirmHandover = useRpcMutation('confirm_handover');
+  const cancelNoShow = useRpcMutation('cancel_no_show');
+  const markComplete = useRpcMutation('mark_complete');
+
+  if (isLoading) return <p className="text-muted">Loading…</p>;
+
+  return (
+    <div>
+      <div className="mb-5">
+        <div className="mb-1.5 text-[11.5px] font-bold uppercase tracking-wide text-accent">Lister</div>
+        <h1 className="text-2xl">Bookings Received</h1>
+        <p className="mt-1.5 text-muted">Requests and active rentals for your vehicles.</p>
+      </div>
+
+      <div className="flex flex-col gap-3.5">
+        {bookings?.map((b) => (
+          <Card key={b.id} className="p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-[14.5px] font-bold">{b.renter.first_name} {b.renter.last_name}</div>
+                <div className="text-xs text-muted">
+                  {b.renter.verified_status === 'verified' ? 'Verified' : 'Not verified'} · Born{' '}
+                  {b.renter.birthday ? formatDate(b.renter.birthday) : '—'} · {b.renter.address}
+                </div>
+                <div className="text-xs text-muted">
+                  {b.vehicle.model.brand.name} {b.vehicle.model.name} · {b.vehicle.plate_number} ·{' '}
+                  {formatDate(b.start_date)}–{formatDate(b.end_date)}
+                </div>
+              </div>
+              <BookingStatusPill status={b.status} />
+            </div>
+
+            <div className="mt-3 flex gap-5 text-[12.5px]">
+              <div><span className="text-muted">Total price</span> <strong className="tabular">{formatCurrency(b.total_price)}</strong></div>
+              {b.status === 'downpayment_paid' ? (
+                <div><span className="text-muted">Balance owed</span> <strong className="tabular text-bad">{formatCurrency(b.balance_amount)}</strong></div>
+              ) : null}
+            </div>
+
+            {b.status === 'downpayment_paid' ? (
+              <p className="mt-2 text-xs text-muted">Handover is locked until the balance shows as paid.</p>
+            ) : null}
+
+            <div className="mt-3.5 flex items-center gap-2">
+              {b.status === 'pending_owner' ? (
+                <>
+                  <Button size="sm" onClick={() => accept.mutate(b.id)}>Accept</Button>
+                  <Button variant="danger" size="sm" onClick={() => reject.mutate(b.id)}>Decline</Button>
+                </>
+              ) : null}
+              {b.status === 'downpayment_paid' ? (
+                <>
+                  <Button size="sm" disabled title="Balance must be paid before handover can be confirmed">
+                    Confirm Handover
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => cancelNoShow.mutate(b.id)}>
+                    Cancel — Unpaid at Meetup
+                  </Button>
+                </>
+              ) : null}
+              {b.status === 'fully_paid' ? (
+                <Button size="sm" onClick={() => confirmHandover.mutate(b.id)}>Confirm Handover</Button>
+              ) : null}
+              {b.status === 'active' ? (
+                <Button size="sm" onClick={() => markComplete.mutate(b.id)}>Mark Complete</Button>
+              ) : null}
+            </div>
+          </Card>
+        ))}
+
+        {bookings?.length === 0 ? <p className="py-16 text-center text-muted">No booking requests yet.</p> : null}
+      </div>
+    </div>
+  );
+}
