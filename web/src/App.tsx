@@ -20,6 +20,7 @@ import { AdminPaymentsPage } from '@/routes/admin/payments';
 import { AdminAuditPage } from '@/routes/admin/audit';
 import { AdminSettingsPage } from '@/routes/admin/settings';
 import { AdminDashboardPage } from '@/routes/admin/dashboard';
+import { AdminAnalyticsPage } from '@/routes/admin/analytics';
 import { InquirePage } from '@/routes/inquire';
 import { AdminInquiriesPage } from '@/routes/admin/inquiries';
 
@@ -63,6 +64,7 @@ export default function App() {
         <Route path="bookings-received" element={<BookingsReceivedPage />} />
 
         <Route path="admin" element={<RequireAdmin><AdminDashboardPage /></RequireAdmin>} />
+        <Route path="admin/analytics" element={<RequireAdmin><AdminAnalyticsPage /></RequireAdmin>} />
         <Route path="admin/users" element={<RequireAdmin><AdminUsersPage /></RequireAdmin>} />
         <Route path="admin/vehicles" element={<RequireAdmin><AdminVehiclesPage /></RequireAdmin>} />
         <Route path="admin/catalog" element={<RequireAdmin><AdminCatalogPage /></RequireAdmin>} />

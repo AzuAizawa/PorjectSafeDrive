@@ -17,6 +17,7 @@ const listerNav = [
 
 const adminNav = [
   { to: '/admin', label: 'Dashboard' },
+  { to: '/admin/analytics', label: 'Analytics' },
   { to: '/admin/users', label: 'Users' },
   { to: '/admin/vehicles', label: 'Vehicle Approval' },
   { to: '/admin/catalog', label: 'Car Catalog' },
