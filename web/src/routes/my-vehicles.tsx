@@ -26,9 +26,17 @@ async function fetchMyVehicles(ownerId: string) {
     .in('key', ['free_vehicle_slots', 'subscription_price', 'subscription_slots']);
   const settings = Object.fromEntries((settingsRows ?? []).map((s) => [s.key, Number(s.value)]));
 
+  // The actual usable capacity includes any active (non-expired) subscription
+  // slots on top of the free tier — see get_vehicle_slot_capacity() /
+  // 029_vehicle_quota_enforcement.sql, the source of truth approve_vehicle()
+  // itself checks. Read it the same way here so the progress bar and the
+  // enforcement it's describing never disagree.
+  const { data: capacityRow } = await supabase.rpc('get_vehicle_slot_capacity', { p_profile_id: ownerId });
+
   return {
     vehicles: data as VehicleRow[],
     freeSlots: settings.free_vehicle_slots ?? 5,
+    capacity: (capacityRow as unknown as number) ?? settings.free_vehicle_slots ?? 5,
     subscriptionPrice: settings.subscription_price ?? 399,
     subscriptionSlots: settings.subscription_slots ?? 15,
   };
@@ -52,8 +60,9 @@ export function MyVehiclesPage() {
   });
 
   const activeCount = data?.vehicles.filter((v) => v.listing_status === 'active').length ?? 0;
-  const freeSlots = data?.freeSlots ?? 5;
-  const pct = Math.min(100, (activeCount / freeSlots) * 100);
+  const overQuotaCount = data?.vehicles.filter((v) => v.listing_status === 'paused_over_quota').length ?? 0;
+  const capacity = data?.capacity ?? data?.freeSlots ?? 5;
+  const pct = Math.min(100, (activeCount / capacity) * 100);
 
   const subscribe = useMutation({
     mutationFn: async () => {
@@ -102,9 +111,12 @@ export function MyVehiclesPage() {
           <Card className="mb-5 p-5">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-[13.5px] font-bold">{activeCount} of {freeSlots} free slots used</div>
+                <div className="text-[13.5px] font-bold">{activeCount} of {capacity} slots used</div>
                 <p className="text-xs text-muted">
-                  Need more? Subscribe for {data?.subscriptionSlots ?? 15} additional slots.
+                  {capacity > (data?.freeSlots ?? 5)
+                    ? `${data?.freeSlots ?? 5} free + subscription slots active.`
+                    : `Need more? Subscribe for ${data?.subscriptionSlots ?? 15} additional slots.`}
+                  {overQuotaCount > 0 ? ` ${overQuotaCount} vehicle${overQuotaCount > 1 ? 's are' : ' is'} paused over quota.` : ''}
                 </p>
               </div>
               <Button variant="secondary" size="sm" disabled={subscribe.isPending} onClick={() => subscribe.mutate()}>
@@ -112,7 +124,7 @@ export function MyVehiclesPage() {
               </Button>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
-              <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
+              <div className={cn('h-full', overQuotaCount > 0 ? 'bg-bad' : 'bg-accent')} style={{ width: `${pct}%` }} />
             </div>
           </Card>
 

@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Avatar } from '@/components/ui/avatar';
+import { NotificationBell } from '@/components/notification-bell';
 
 const renterNav = [
   { to: '/browse', label: 'Browse Cars' },
@@ -64,6 +65,7 @@ export function AppShell() {
         {!isStaff ? (
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            {profile ? <NotificationBell userId={profile.id} /> : null}
             <NavLink
               to="/inquire"
               className={({ isActive }) =>
@@ -134,6 +136,7 @@ export function AppShell() {
         ) : (
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            {profile ? <NotificationBell userId={profile.id} /> : null}
             <button
               className="rounded-full border border-line bg-accent-soft px-3 py-1 text-xs font-bold text-accent-strong hover:-translate-y-px hover:shadow-md"
               onClick={() => supabase.auth.signOut()}

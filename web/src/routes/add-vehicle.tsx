@@ -42,6 +42,17 @@ async function fetchCatalog() {
   return { brands: brands as CarBrand[], models: models as CarModel[], maxVehicleAge: Number(setting?.value ?? 15) };
 }
 
+async function fetchQuotaStatus(ownerId: string) {
+  const { count } = await supabase
+    .from('vehicles')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', ownerId)
+    .eq('listing_status', 'active')
+    .eq('approval_status', 'approved');
+  const { data: capacity } = await supabase.rpc('get_vehicle_slot_capacity', { p_profile_id: ownerId });
+  return { activeCount: count ?? 0, capacity: (capacity as unknown as number) ?? 5 };
+}
+
 export function AddVehiclePage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -52,6 +63,11 @@ export function AddVehiclePage() {
   const [error, setError] = useState<string | null>(null);
 
   const { data: catalog } = useQuery({ queryKey: ['catalog'], queryFn: fetchCatalog });
+  const { data: quota } = useQuery({
+    queryKey: ['vehicle-quota', profile?.id],
+    queryFn: () => fetchQuotaStatus(profile!.id),
+    enabled: !!profile,
+  });
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
@@ -138,6 +154,14 @@ export function AddVehiclePage() {
         ← Back to My Vehicles
       </Button>
       <h1 className="mb-5 text-2xl">Add a Vehicle</h1>
+
+      {quota && quota.activeCount >= quota.capacity ? (
+        <Card className="mb-4 border-warn bg-warn-soft p-4 text-sm text-warn">
+          You're already using all {quota.capacity} of your listing slots. This vehicle can still be submitted for
+          review, but once approved it'll be placed in "Paused — Over Quota" until you free up a slot or subscribe
+          for more.
+        </Card>
+      ) : null}
 
       <Card className="p-5">
         <form onSubmit={handleSubmit((v) => submit.mutate(schema.parse(v)))} className="flex flex-col gap-4">
