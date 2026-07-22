@@ -46,6 +46,19 @@ export function MyBookingsPage() {
     onSuccess: invalidate,
   });
 
+  const pay = useMutation({
+    mutationFn: async (vars: { bookingId: string; paymentType: 'downpayment' | 'balance' }) => {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: { booking_id: vars.bookingId, payment_type: vars.paymentType },
+      });
+      if (error) throw error;
+      return data.checkout_url as string;
+    },
+    onSuccess: (checkoutUrl) => {
+      window.location.href = checkoutUrl;
+    },
+  });
+
   if (isLoading) return <p className="text-muted">Loading…</p>;
 
   return (
@@ -81,10 +94,22 @@ export function MyBookingsPage() {
 
               <div className="mt-3.5 flex gap-2">
                 {b.status === 'pending_payment' ? (
-                  <Button size="sm">Pay Downpayment</Button>
+                  <Button
+                    size="sm"
+                    disabled={pay.isPending}
+                    onClick={() => pay.mutate({ bookingId: b.id, paymentType: 'downpayment' })}
+                  >
+                    {pay.isPending ? 'Redirecting…' : 'Pay Downpayment'}
+                  </Button>
                 ) : null}
                 {b.status === 'downpayment_paid' ? (
-                  <Button size="sm">Pay Balance</Button>
+                  <Button
+                    size="sm"
+                    disabled={pay.isPending}
+                    onClick={() => pay.mutate({ bookingId: b.id, paymentType: 'balance' })}
+                  >
+                    {pay.isPending ? 'Redirecting…' : 'Pay Balance'}
+                  </Button>
                 ) : null}
                 {['pending_owner', 'pending_payment', 'downpayment_paid', 'fully_paid'].includes(b.status) ? (
                   <Button variant="ghost" size="sm" onClick={() => cancel.mutate(b.id)}>

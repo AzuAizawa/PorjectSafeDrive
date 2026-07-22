@@ -12,5 +12,8 @@ web/dist-ssr/
 .env.*
 !.env.example
 
+# Supabase CLI local link state
+supabase/.temp/
+
 # OS/editor
 .DS_Store
