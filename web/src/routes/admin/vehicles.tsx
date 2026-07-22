@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
 import { formatCurrency } from '@/lib/utils';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { CarBrand, CarModel, ListingReport, Profile, Vehicle } from '@/lib/database.types';
 
 type VehicleRow = Vehicle & { model: CarModel & { brand: CarBrand }; owner: Pick<Profile, 'first_name' | 'last_name' | 'verified_status'> };
@@ -44,6 +45,7 @@ export function AdminVehiclesPage() {
   const [selected, setSelected] = useState<VehicleRow | null>(null);
   const [orcrUrl, setOrcrUrl] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const { data: vehicles } = useQuery({ queryKey: ['admin-vehicles'], queryFn: fetchVehicles });
   const { data: reports } = useQuery({ queryKey: ['admin-listing-reports'], queryFn: fetchOpenReports });
@@ -55,6 +57,7 @@ export function AdminVehiclesPage() {
   }
 
   const invalidate = () => {
+    setActionError(null);
     queryClient.invalidateQueries({ queryKey: ['admin-vehicles'] });
     setSelected(null);
   };
@@ -65,6 +68,7 @@ export function AdminVehiclesPage() {
       if (error) throw error;
     },
     onSuccess: invalidate,
+    onError: (e) => setActionError(friendlyErrorMessage(e)),
   });
   const reject = useMutation({
     mutationFn: async (vars: { vehicleId: string; reason: string }) => {
@@ -72,6 +76,7 @@ export function AdminVehiclesPage() {
       if (error) throw error;
     },
     onSuccess: invalidate,
+    onError: (e) => setActionError(friendlyErrorMessage(e)),
   });
   const dismissReport = useMutation({
     mutationFn: async (reportId: string) => {
@@ -79,6 +84,7 @@ export function AdminVehiclesPage() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-listing-reports'] }),
+    onError: (e) => setActionError(friendlyErrorMessage(e)),
   });
 
   return (
@@ -88,6 +94,10 @@ export function AdminVehiclesPage() {
         <h1 className="text-2xl">Vehicle Approval</h1>
         <p className="mt-1.5 text-muted">Cross-check the ORCR against the owner's verified identity before approving.</p>
       </div>
+
+      {actionError ? (
+        <p className="mb-4 rounded-md border border-bad bg-bad-soft p-3 text-sm text-bad">{actionError}</p>
+      ) : null}
 
       {reports && reports.length > 0 ? (
         <Card className="mb-5 p-5">

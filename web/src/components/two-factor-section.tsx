@@ -58,6 +58,7 @@ export function TwoFactorSection() {
       if (unenrollError) throw unenrollError;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mfa-factors'] }),
+    onError: (e: Error) => setError(e.message),
   });
 
   const hasVerifiedFactor = (verifiedFactors?.length ?? 0) > 0;

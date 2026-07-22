@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
 import { ListerAnalyticsTab } from '@/components/lister-analytics-tab';
 import { cn, formatCurrency } from '@/lib/utils';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { CarBrand, CarModel, Vehicle } from '@/lib/database.types';
 
 type VehicleRow = Vehicle & { model: CarModel & { brand: CarBrand } };
@@ -52,6 +53,7 @@ function statusPill(v: Vehicle) {
 
 export function MyVehiclesPage() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<'vehicles' | 'analytics'>('vehicles');
   const { data, isLoading } = useQuery({
     queryKey: ['vehicles', 'mine', profile?.id],
@@ -63,6 +65,8 @@ export function MyVehiclesPage() {
   const overQuotaCount = data?.vehicles.filter((v) => v.listing_status === 'paused_over_quota').length ?? 0;
   const capacity = data?.capacity ?? data?.freeSlots ?? 5;
   const pct = Math.min(100, (activeCount / capacity) * 100);
+
+  const isVerified = profile?.verified_status === 'verified';
 
   const subscribe = useMutation({
     mutationFn: async () => {
@@ -76,6 +80,14 @@ export function MyVehiclesPage() {
       window.location.href = checkoutUrl;
     },
   });
+
+  function handleSubscribeClick() {
+    if (!isVerified) {
+      navigate('/verify');
+      return;
+    }
+    subscribe.mutate();
+  }
 
   return (
     <div>
@@ -119,13 +131,18 @@ export function MyVehiclesPage() {
                   {overQuotaCount > 0 ? ` ${overQuotaCount} vehicle${overQuotaCount > 1 ? 's are' : ' is'} paused over quota.` : ''}
                 </p>
               </div>
-              <Button variant="secondary" size="sm" disabled={subscribe.isPending} onClick={() => subscribe.mutate()}>
-                {subscribe.isPending ? 'Redirecting…' : `Subscribe — ${formatCurrency(data?.subscriptionPrice ?? 399)}/mo`}
+              <Button variant="secondary" size="sm" disabled={subscribe.isPending} onClick={handleSubscribeClick}>
+                {subscribe.isPending
+                  ? 'Redirecting…'
+                  : isVerified
+                    ? `Subscribe — ${formatCurrency(data?.subscriptionPrice ?? 399)}/mo`
+                    : 'Get Verified to Subscribe'}
               </Button>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
               <div className={cn('h-full', overQuotaCount > 0 ? 'bg-bad' : 'bg-accent')} style={{ width: `${pct}%` }} />
             </div>
+            {subscribe.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(subscribe.error)}</p> : null}
           </Card>
 
           <div className="rounded-2xl border border-line bg-surface">

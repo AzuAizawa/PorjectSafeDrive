@@ -10,6 +10,7 @@
 // succeeded/failed), so this only kicks the refund off; paymongo-webhook's
 // `refund.updated` handling confirms the terminal result.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { corsHeaders, handleCorsPreflight } from '../_shared/cors.ts';
 
 const PAYMONGO_SECRET_KEY = Deno.env.get('PAYMONGO_SECRET_KEY')!;
 
@@ -22,10 +23,15 @@ function toCentavos(pesos: number) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  const preflight = handleCorsPreflight(req);
+  if (preflight) return preflight;
+
+  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: corsHeaders });
 
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader) return new Response(JSON.stringify({ error: 'Missing Authorization header' }), { status: 401 });
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: 'Missing Authorization header' }), { status: 401, headers: corsHeaders });
+  }
 
   // Scoped to the caller's own JWT (not service role) so is_admin() inside
   // mark_deposit_refund_processing() reflects the real calling admin —
@@ -36,21 +42,25 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) {
-    return new Response(JSON.stringify({ error: 'Not authenticated' }), { status: 401 });
+    return new Response(JSON.stringify({ error: 'Not authenticated' }), { status: 401, headers: corsHeaders });
   }
 
   const body = await req.json().catch(() => null);
   const bookingId = body?.booking_id;
-  if (!bookingId) return new Response(JSON.stringify({ error: 'booking_id required' }), { status: 400 });
+  if (!bookingId) {
+    return new Response(JSON.stringify({ error: 'booking_id required' }), { status: 400, headers: corsHeaders });
+  }
 
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
     .select('id, status, deposit_amount, deposit_paid, deposit_refunded')
     .eq('id', bookingId)
     .single();
-  if (bookingError || !booking) return new Response(JSON.stringify({ error: 'Booking not found' }), { status: 404 });
+  if (bookingError || !booking) {
+    return new Response(JSON.stringify({ error: 'Booking not found' }), { status: 404, headers: corsHeaders });
+  }
   if (booking.status !== 'completed' || !booking.deposit_paid || booking.deposit_refunded) {
-    return new Response(JSON.stringify({ error: 'No deposit refund pending for this booking' }), { status: 409 });
+    return new Response(JSON.stringify({ error: 'No deposit refund pending for this booking' }), { status: 409, headers: corsHeaders });
   }
 
   const { data: originalPaymentRef, error: refError } = await supabase.rpc('get_downpayment_paymongo_reference', {
@@ -59,7 +69,7 @@ Deno.serve(async (req) => {
   if (refError || !originalPaymentRef) {
     return new Response(
       JSON.stringify({ error: 'Could not find the original PayMongo payment for this booking' }),
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 
@@ -80,7 +90,10 @@ Deno.serve(async (req) => {
 
   if (!refundRes.ok) {
     const errBody = await refundRes.text();
-    return new Response(JSON.stringify({ error: 'PayMongo refund request failed', details: errBody }), { status: 502 });
+    return new Response(JSON.stringify({ error: 'PayMongo refund request failed', details: errBody }), {
+      status: 502,
+      headers: corsHeaders,
+    });
   }
 
   const refund = await refundRes.json();
@@ -91,10 +104,10 @@ Deno.serve(async (req) => {
     p_refund_reference: refundId,
   });
   if (recordError) {
-    return new Response(JSON.stringify({ error: recordError.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: recordError.message }), { status: 500, headers: corsHeaders });
   }
 
   return new Response(JSON.stringify({ refund_id: refundId, status: refund.data.attributes.status }), {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 });

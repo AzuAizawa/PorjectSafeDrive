@@ -12,6 +12,7 @@ interface ConfirmDialogProps {
   onConfirm: (reason?: string) => void;
   onCancel: () => void;
   pending?: boolean;
+  error?: string | null;
 }
 
 export function ConfirmDialog({
@@ -25,6 +26,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   pending = false,
+  error = null,
 }: ConfirmDialogProps) {
   const [reason, setReason] = useState('');
   if (!open) return null;
@@ -61,6 +63,7 @@ export function ConfirmDialog({
             {pending ? 'Please wait…' : confirmLabel}
           </Button>
         </div>
+        {error ? <p className="mt-2 text-right text-xs text-bad">{error}</p> : null}
       </div>
     </div>
   );

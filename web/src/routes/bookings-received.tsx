@@ -12,6 +12,7 @@ import { EmergencyBanner } from '@/components/emergency-banner';
 import { BookingChat } from '@/components/booking-chat';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { fetchRatingSummaries } from '@/lib/ratings';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { Booking, CarModel, CarBrand, Profile } from '@/lib/database.types';
 
 type BookingRow = Booking & {
@@ -63,7 +64,11 @@ export function BookingsReceivedPage() {
     enabled: renterIds.length > 0,
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bookings'] });
+  const [actionError, setActionError] = useState<string | null>(null);
+  const invalidate = () => {
+    setActionError(null);
+    queryClient.invalidateQueries({ queryKey: ['bookings'] });
+  };
 
   function useRpcMutation(fn: string) {
     return useMutation({
@@ -72,6 +77,7 @@ export function BookingsReceivedPage() {
         if (error) throw error;
       },
       onSuccess: invalidate,
+      onError: (e) => setActionError(friendlyErrorMessage(e)),
     });
   }
 
@@ -88,6 +94,7 @@ export function BookingsReceivedPage() {
       invalidate();
       declineDialog.close();
     },
+    onError: (e) => setActionError(friendlyErrorMessage(e)),
   });
 
   const cancelNoShow = useMutation({
@@ -99,6 +106,7 @@ export function BookingsReceivedPage() {
       invalidate();
       noShowDialog.close();
     },
+    onError: (e) => setActionError(friendlyErrorMessage(e)),
   });
 
   if (isLoading) return <p className="text-muted">Loading…</p>;
@@ -114,6 +122,9 @@ export function BookingsReceivedPage() {
       </div>
 
       {bookings?.some((b) => b.status === 'active') ? <EmergencyBanner /> : null}
+      {actionError ? (
+        <p className="mb-4 rounded-md border border-bad bg-bad-soft p-3 text-sm text-bad">{actionError}</p>
+      ) : null}
 
       <div className="flex flex-col gap-3.5">
         {bookings?.map((b) => (
@@ -204,6 +215,7 @@ export function BookingsReceivedPage() {
         pending={reject.isPending}
         onConfirm={(reason) => declineDialog.target && reject.mutate({ bookingId: declineDialog.target, reason: reason! })}
         onCancel={declineDialog.close}
+        error={reject.isError ? friendlyErrorMessage(reject.error) : null}
       />
 
       <ConfirmDialog
@@ -215,6 +227,7 @@ export function BookingsReceivedPage() {
         pending={cancelNoShow.isPending}
         onConfirm={() => noShowDialog.target && cancelNoShow.mutate(noShowDialog.target)}
         onCancel={noShowDialog.close}
+        error={cancelNoShow.isError ? friendlyErrorMessage(cancelNoShow.error) : null}
       />
 
       <RateBookingDialog

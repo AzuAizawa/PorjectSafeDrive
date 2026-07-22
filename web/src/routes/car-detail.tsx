@@ -281,6 +281,7 @@ export function CarDetailPage() {
         pending={reportListing.isPending}
         onConfirm={(reason) => reason && reportListing.mutate(reason)}
         onCancel={() => setReportOpen(false)}
+        error={reportListing.isError ? friendlyErrorMessage(reportListing.error) : null}
       />
     </div>
   );

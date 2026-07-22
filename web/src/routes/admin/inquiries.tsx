@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { Message as SupportMessage, Profile } from '@/lib/database.types';
 
 interface ConversationRow {
@@ -145,6 +146,7 @@ export function AdminInquiriesPage() {
               <input className="input-base flex-1" placeholder="Reply…" value={text} onChange={(e) => setText(e.target.value)} />
               <Button type="submit" disabled={!text.trim() || send.isPending}>Send</Button>
             </form>
+            {send.isError ? <p className="mt-1.5 text-xs text-bad">{friendlyErrorMessage(send.error)}</p> : null}
           </Card>
         ) : (
           <div className="grid h-[560px] place-items-center text-muted">Select a conversation to reply.</div>

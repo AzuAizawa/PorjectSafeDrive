@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { PlatformSetting } from '@/lib/database.types';
 
 async function fetchSettings() {
@@ -63,6 +64,7 @@ export function AdminSettingsPage() {
           </Button>
         </div>
         {save.isSuccess ? <p className="mt-2 text-right text-xs text-good">Saved — takes effect immediately.</p> : null}
+        {save.isError ? <p className="mt-2 text-right text-xs text-bad">{friendlyErrorMessage(save.error)}</p> : null}
       </Card>
     </div>
   );

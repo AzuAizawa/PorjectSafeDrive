@@ -15,6 +15,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { previewCancellation } from '@/lib/cancellation';
 import { signedUrl } from '@/lib/storage';
 import { fetchRatingSummaries } from '@/lib/ratings';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { Booking, CarModel, CarBrand, Profile } from '@/lib/database.types';
 
 type BookingRow = Booking & {
@@ -79,7 +80,11 @@ export function MyBookingsPage() {
     enabled: ownerIds.length > 0,
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bookings'] });
+  const [actionError, setActionError] = useState<string | null>(null);
+  const invalidate = () => {
+    setActionError(null);
+    queryClient.invalidateQueries({ queryKey: ['bookings'] });
+  };
 
   const cancel = useMutation({
     mutationFn: async (bookingId: string) => {
@@ -90,6 +95,7 @@ export function MyBookingsPage() {
       invalidate();
       cancelDialog.close();
     },
+    onError: (e) => setActionError(friendlyErrorMessage(e)),
   });
   const markComplete = useMutation({
     mutationFn: async (bookingId: string) => {
@@ -97,6 +103,7 @@ export function MyBookingsPage() {
       if (error) throw error;
     },
     onSuccess: invalidate,
+    onError: (e) => setActionError(friendlyErrorMessage(e)),
   });
 
   const pay = useMutation({
@@ -127,6 +134,9 @@ export function MyBookingsPage() {
       </div>
 
       {bookings?.some((b) => b.status === 'active') ? <EmergencyBanner /> : null}
+      {actionError ? (
+        <p className="mb-4 rounded-md border border-bad bg-bad-soft p-3 text-sm text-bad">{actionError}</p>
+      ) : null}
 
       <div className="flex flex-col gap-3.5">
         {bookings?.map((b) => (
@@ -166,7 +176,7 @@ export function MyBookingsPage() {
                     disabled={pay.isPending}
                     onClick={() => pay.mutate({ bookingId: b.id, paymentType: 'downpayment' })}
                   >
-                    {pay.isPending ? 'Redirecting…' : 'Pay Downpayment'}
+                    {pay.isPending && pay.variables?.bookingId === b.id ? 'Redirecting…' : 'Pay Downpayment'}
                   </Button>
                 ) : null}
                 {b.status === 'downpayment_paid' ? (
@@ -175,7 +185,7 @@ export function MyBookingsPage() {
                     disabled={pay.isPending}
                     onClick={() => pay.mutate({ bookingId: b.id, paymentType: 'balance' })}
                   >
-                    {pay.isPending ? 'Redirecting…' : 'Pay Balance'}
+                    {pay.isPending && pay.variables?.bookingId === b.id ? 'Redirecting…' : 'Pay Balance'}
                   </Button>
                 ) : null}
                 {['pending_owner', 'pending_payment', 'downpayment_paid', 'fully_paid'].includes(b.status) ? (
@@ -214,6 +224,9 @@ export function MyBookingsPage() {
                   </Button>
                 ) : null}
               </div>
+              {pay.isError && pay.variables?.bookingId === b.id ? (
+                <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(pay.error)}</p>
+              ) : null}
               {chatOpenId === b.id && profile ? <BookingChat bookingId={b.id} currentUserId={profile.id} /> : null}
             </div>
           </Card>
@@ -233,6 +246,7 @@ export function MyBookingsPage() {
         pending={cancel.isPending}
         onConfirm={() => cancelDialog.target && cancel.mutate(cancelDialog.target)}
         onCancel={cancelDialog.close}
+        error={cancel.isError ? friendlyErrorMessage(cancel.error) : null}
       />
 
       <ReportIssueDialog

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { Message as SupportMessage } from '@/lib/database.types';
 
 async function fetchOrCreateConversation() {
@@ -130,6 +131,7 @@ export function InquirePage() {
             Send
           </Button>
         </form>
+        {send.isError ? <p className="mt-1.5 text-xs text-bad">{friendlyErrorMessage(send.error)}</p> : null}
       </Card>
     </div>
   );

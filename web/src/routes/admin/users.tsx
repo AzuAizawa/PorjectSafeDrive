@@ -239,6 +239,7 @@ export function AdminUsersPage() {
                   </Button>
                 </div>
                 {approve.isError ? <p className="mb-3 text-xs text-bad">{friendlyErrorMessage(approve.error)}</p> : null}
+                {reject.isError ? <p className="mb-3 text-xs text-bad">{friendlyErrorMessage(reject.error)}</p> : null}
               </>
             ) : (
               <p className="mb-4 text-sm text-muted">{statusPill(selected.verified_status)}</p>
@@ -272,6 +273,8 @@ export function AdminUsersPage() {
               ) : (
                 <p className="text-xs text-muted">Suspend/ban actions require full admin access.</p>
               )}
+              {setStatus.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(setStatus.error)}</p> : null}
+              {clearStrikes.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(clearStrikes.error)}</p> : null}
             </div>
           </Card>
         ) : null}

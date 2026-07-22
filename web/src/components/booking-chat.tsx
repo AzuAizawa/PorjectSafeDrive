@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { Message } from '@/lib/database.types';
 
 async function fetchMessages(bookingId: string) {
@@ -79,6 +80,7 @@ export function BookingChat({ bookingId, currentUserId }: { bookingId: string; c
           Send
         </Button>
       </form>
+      {send.isError ? <p className="mt-1 text-xs text-bad">{friendlyErrorMessage(send.error)}</p> : null}
     </div>
   );
 }

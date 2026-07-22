@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
 import { formatDate } from '@/lib/utils';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { Dispute, Profile } from '@/lib/database.types';
 
 type DisputeRow = Dispute & {
@@ -117,6 +118,7 @@ export function AdminDisputesPage() {
                     Resolve Dispute
                   </Button>
                 </div>
+                {resolve.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(resolve.error)}</p> : null}
               </>
             )}
           </Card>

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { CompanyInfo } from '@/lib/database.types';
 
 async function fetchCompanyInfo() {
@@ -64,6 +65,7 @@ export function AdminCompanyInfoPage() {
           </Button>
         </div>
         {save.isSuccess ? <p className="mt-2 text-right text-xs text-good">Saved.</p> : null}
+        {save.isError ? <p className="mt-2 text-right text-xs text-bad">{friendlyErrorMessage(save.error)}</p> : null}
       </Card>
     </div>
   );

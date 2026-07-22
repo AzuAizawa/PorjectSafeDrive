@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { BodyType, CarBrand, CarModel, FuelType } from '@/lib/database.types';
 
 const BODY_SEAT_DEFAULTS: Record<BodyType, number> = {
@@ -24,7 +25,12 @@ export function AdminCatalogPage() {
   const [newBrand, setNewBrand] = useState('');
   const [form, setForm] = useState({ brand_id: '', name: '', body_type: 'sedan' as BodyType, seats: BODY_SEAT_DEFAULTS.sedan, fuel_type: 'gasoline' as FuelType });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-catalog'] });
+  const [actionError, setActionError] = useState<string | null>(null);
+  const invalidate = () => {
+    setActionError(null);
+    queryClient.invalidateQueries({ queryKey: ['admin-catalog'] });
+  };
+  const onActionError = (e: unknown) => setActionError(friendlyErrorMessage(e));
 
   const addBrand = useMutation({
     mutationFn: async (name: string) => {
@@ -32,6 +38,7 @@ export function AdminCatalogPage() {
       if (error) throw error;
     },
     onSuccess: () => { setNewBrand(''); invalidate(); },
+    onError: onActionError,
   });
 
   const addModel = useMutation({
@@ -40,6 +47,7 @@ export function AdminCatalogPage() {
       if (error) throw error;
     },
     onSuccess: () => { setForm((f) => ({ ...f, name: '' })); invalidate(); },
+    onError: onActionError,
   });
 
   const deleteBrand = useMutation({
@@ -48,6 +56,7 @@ export function AdminCatalogPage() {
       if (error) throw error;
     },
     onSuccess: invalidate,
+    onError: onActionError,
   });
   const deleteModel = useMutation({
     mutationFn: async (id: string) => {
@@ -55,6 +64,7 @@ export function AdminCatalogPage() {
       if (error) throw error;
     },
     onSuccess: invalidate,
+    onError: onActionError,
   });
 
   return (
@@ -64,6 +74,10 @@ export function AdminCatalogPage() {
         <h1 className="text-2xl">Car Catalog</h1>
         <p className="mt-1.5 text-muted">Brands and models available to listers when adding a vehicle.</p>
       </div>
+
+      {actionError ? (
+        <p className="mb-4 rounded-md border border-bad bg-bad-soft p-3 text-sm text-bad">{actionError}</p>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-5">
         <Card className="p-5">
