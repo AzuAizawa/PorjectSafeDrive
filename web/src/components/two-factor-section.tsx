@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -14,6 +15,8 @@ async function fetchFactors() {
 // enroll returns a ready-made QR code SVG so no client-side QR library
 // is needed.
 export function TwoFactorSection() {
+  const { profile } = useAuth();
+  const isStaff = profile?.role === 'admin' || profile?.role === 'support';
   const queryClient = useQueryClient();
   const { data: verifiedFactors } = useQuery({ queryKey: ['mfa-factors'], queryFn: fetchFactors });
   const [enrolling, setEnrolling] = useState<{ factorId: string; qrCode: string; secret: string } | null>(null);
@@ -64,19 +67,22 @@ export function TwoFactorSection() {
       <h3 className="mb-1 text-sm font-bold">Two-Factor Authentication</h3>
       <p className="mb-3 text-xs text-muted">
         Adds a 6-digit code from an authenticator app (Google Authenticator, Authy, etc.) on top of your password.
+        {isStaff ? ' Required for admin/support accounts and cannot be disabled while you have staff access.' : ''}
       </p>
 
       {hasVerifiedFactor ? (
         <div className="flex items-center justify-between rounded-md bg-good-soft p-3 text-sm text-good">
           <span>✓ Two-factor authentication is enabled.</span>
-          <Button
-            size="sm"
-            variant="danger"
-            disabled={unenroll.isPending}
-            onClick={() => unenroll.mutate(verifiedFactors![0].id)}
-          >
-            Disable
-          </Button>
+          {isStaff ? null : (
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={unenroll.isPending}
+              onClick={() => unenroll.mutate(verifiedFactors![0].id)}
+            >
+              Disable
+            </Button>
+          )}
         </div>
       ) : enrolling ? (
         <div>

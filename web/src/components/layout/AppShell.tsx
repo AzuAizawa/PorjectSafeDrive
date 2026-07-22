@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Avatar } from '@/components/ui/avatar';
 import { NotificationBell } from '@/components/notification-bell';
+import { MandatoryMfaGate } from '@/components/mandatory-mfa-gate';
 
 const renterNav = [
   { to: '/browse', label: 'Browse Cars' },
@@ -55,7 +56,7 @@ export function AppShell() {
     navigate(profile.is_lister ? '/browse' : '/my-vehicles');
   }
 
-  return (
+  const shell = (
     <div className="grid min-h-screen grid-cols-[232px_1fr] grid-rows-[56px_1fr] max-[860px]:grid-cols-1">
       <header className="glass sticky top-0 z-40 col-span-2 row-start-1 flex items-center justify-between border-b border-line/70 px-5 max-[860px]:col-span-1 max-[860px]:px-3.5">
         <div className="flex items-center gap-2.5 font-bold text-base">
@@ -196,4 +197,6 @@ export function AppShell() {
       </main>
     </div>
   );
+
+  return isStaff ? <MandatoryMfaGate>{shell}</MandatoryMfaGate> : shell;
 }
