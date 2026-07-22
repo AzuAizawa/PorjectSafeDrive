@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
@@ -6,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { BookingStatusPill } from '@/components/ui/pill';
 import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
 import { EmergencyBanner } from '@/components/emergency-banner';
+import { BookingChat } from '@/components/booking-chat';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Booking, CarModel, CarBrand, Profile } from '@/lib/database.types';
 
@@ -32,6 +34,7 @@ export function BookingsReceivedPage() {
   const queryClient = useQueryClient();
   const declineDialog = useConfirmTarget<string>();
   const noShowDialog = useConfirmTarget<string>();
+  const [chatOpenId, setChatOpenId] = useState<string | null>(null);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings', 'received', profile?.id],
@@ -141,7 +144,13 @@ export function BookingsReceivedPage() {
               {b.status === 'active' ? (
                 <Button size="sm" onClick={() => markComplete.mutate(b.id)}>Mark Complete</Button>
               ) : null}
+              {!['pending_owner', 'owner_rejected', 'expired'].includes(b.status) ? (
+                <Button variant="ghost" size="sm" onClick={() => setChatOpenId(chatOpenId === b.id ? null : b.id)}>
+                  💬 {chatOpenId === b.id ? 'Hide Chat' : 'Message Renter'}
+                </Button>
+              ) : null}
             </div>
+            {chatOpenId === b.id && profile ? <BookingChat bookingId={b.id} currentUserId={profile.id} /> : null}
           </Card>
         ))}
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
@@ -20,9 +20,18 @@ async function fetchMyVehicles(ownerId: string) {
     .order('created_at', { ascending: false });
   if (error) throw error;
 
-  const { data: setting } = await supabase.from('platform_settings').select('value').eq('key', 'free_vehicle_slots').single();
+  const { data: settingsRows } = await supabase
+    .from('platform_settings')
+    .select('key, value')
+    .in('key', ['free_vehicle_slots', 'subscription_price', 'subscription_slots']);
+  const settings = Object.fromEntries((settingsRows ?? []).map((s) => [s.key, Number(s.value)]));
 
-  return { vehicles: data as VehicleRow[], freeSlots: Number(setting?.value ?? 5) };
+  return {
+    vehicles: data as VehicleRow[],
+    freeSlots: settings.free_vehicle_slots ?? 5,
+    subscriptionPrice: settings.subscription_price ?? 399,
+    subscriptionSlots: settings.subscription_slots ?? 15,
+  };
 }
 
 function statusPill(v: Vehicle) {
@@ -45,6 +54,19 @@ export function MyVehiclesPage() {
   const activeCount = data?.vehicles.filter((v) => v.listing_status === 'active').length ?? 0;
   const freeSlots = data?.freeSlots ?? 5;
   const pct = Math.min(100, (activeCount / freeSlots) * 100);
+
+  const subscribe = useMutation({
+    mutationFn: async () => {
+      const { data: checkout, error } = await supabase.functions.invoke('create-checkout', {
+        body: { payment_type: 'subscription' },
+      });
+      if (error) throw error;
+      return checkout.checkout_url as string;
+    },
+    onSuccess: (checkoutUrl) => {
+      window.location.href = checkoutUrl;
+    },
+  });
 
   return (
     <div>
@@ -81,8 +103,13 @@ export function MyVehiclesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[13.5px] font-bold">{activeCount} of {freeSlots} free slots used</div>
-                <p className="text-xs text-muted">Need more? Subscribe for extra slots.</p>
+                <p className="text-xs text-muted">
+                  Need more? Subscribe for {data?.subscriptionSlots ?? 15} additional slots.
+                </p>
               </div>
+              <Button variant="secondary" size="sm" disabled={subscribe.isPending} onClick={() => subscribe.mutate()}>
+                {subscribe.isPending ? 'Redirecting…' : `Subscribe — ${formatCurrency(data?.subscriptionPrice ?? 399)}/mo`}
+              </Button>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
               <div className="h-full bg-accent" style={{ width: `${pct}%` }} />

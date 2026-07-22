@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
@@ -8,6 +9,7 @@ import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog'
 import { ReportIssueDialog } from '@/components/report-issue-dialog';
 import { RateBookingDialog } from '@/components/rate-booking-dialog';
 import { EmergencyBanner } from '@/components/emergency-banner';
+import { BookingChat } from '@/components/booking-chat';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { previewCancellation } from '@/lib/cancellation';
 import { signedUrl } from '@/lib/storage';
@@ -51,6 +53,7 @@ export function MyBookingsPage() {
   const cancelDialog = useConfirmTarget<string>();
   const reportDialog = useConfirmTarget<string>();
   const rateDialog = useConfirmTarget<string>();
+  const [chatOpenId, setChatOpenId] = useState<string | null>(null);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings', 'mine', profile?.id],
@@ -185,7 +188,13 @@ export function MyBookingsPage() {
                     ⬇ Rental agreement
                   </Button>
                 ) : null}
+                {!['pending_owner', 'owner_rejected', 'expired'].includes(b.status) ? (
+                  <Button variant="ghost" size="sm" onClick={() => setChatOpenId(chatOpenId === b.id ? null : b.id)}>
+                    💬 {chatOpenId === b.id ? 'Hide Chat' : 'Message Owner'}
+                  </Button>
+                ) : null}
               </div>
+              {chatOpenId === b.id && profile ? <BookingChat bookingId={b.id} currentUserId={profile.id} /> : null}
             </div>
           </Card>
         ))}

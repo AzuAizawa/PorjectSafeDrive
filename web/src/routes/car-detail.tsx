@@ -30,6 +30,21 @@ async function fetchSettings(): Promise<Record<string, number>> {
   return Object.fromEntries((data as PlatformSetting[]).map((s) => [s.key, Number(s.value)]));
 }
 
+interface VisibleReview {
+  id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  reviewer_first_name: string | null;
+  reviewer_last_name: string | null;
+}
+
+async function fetchOwnerReviews(ownerId: string) {
+  const { data, error } = await supabase.rpc('get_visible_reviews_for_owner', { p_owner_id: ownerId });
+  if (error) throw error;
+  return data as VisibleReview[];
+}
+
 export function CarDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { profile } = useAuth();
@@ -46,6 +61,12 @@ export function CarDetailPage() {
     queryFn: () => signedUrl('vehicle-documents', vehicle!.rental_agreement_path!),
     enabled: !!vehicle?.rental_agreement_path,
   });
+  const { data: reviews } = useQuery({
+    queryKey: ['owner-reviews', vehicle?.owner.id],
+    queryFn: () => fetchOwnerReviews(vehicle!.owner.id),
+    enabled: !!vehicle?.owner.id,
+  });
+  const averageRating = reviews && reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : null;
 
   const pricing = useMemo(() => {
     if (!vehicle || !settings || !startDate || !endDate) return null;
@@ -107,6 +128,9 @@ export function CarDetailPage() {
               </h1>
               <p className="mt-1.5 text-muted">
                 Listed by <strong>{vehicle.owner.first_name} {vehicle.owner.last_name}</strong>
+                {averageRating !== null ? (
+                  <> · <span className="font-semibold text-warn">★ {averageRating.toFixed(1)}</span> ({reviews!.length})</>
+                ) : null}
               </p>
             </div>
             <button className="text-xs font-semibold text-muted underline hover:text-bad" onClick={() => setReportOpen(true)}>
@@ -151,6 +175,23 @@ export function CarDetailPage() {
               >
                 ⬇ Download
               </Button>
+            </Card>
+          ) : null}
+
+          {reviews && reviews.length > 0 ? (
+            <Card className="mt-3.5 p-5">
+              <h3 className="mb-3 text-sm font-bold">Reviews ({reviews.length})</h3>
+              <div className="flex flex-col gap-3.5">
+                {reviews.map((r) => (
+                  <div key={r.id} className="border-b border-line pb-3.5 last:border-none last:pb-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] font-bold">{r.reviewer_first_name} {r.reviewer_last_name}</span>
+                      <span className="text-xs font-semibold text-warn">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                    </div>
+                    {r.comment ? <p className="mt-1 text-sm text-muted">{r.comment}</p> : null}
+                  </div>
+                ))}
+              </div>
             </Card>
           ) : null}
         </div>
