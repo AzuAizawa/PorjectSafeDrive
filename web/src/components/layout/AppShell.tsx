@@ -38,6 +38,7 @@ export function AppShell() {
   const { profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const isStaff = profile?.role === 'admin' || profile?.role === 'support';
   const isFullAdmin = profile?.role === 'admin';
   const nav = isStaff
@@ -55,15 +56,22 @@ export function AppShell() {
   }
 
   return (
-    <div className="grid min-h-screen grid-cols-[232px_1fr] grid-rows-[56px_1fr]">
-      <header className="glass sticky top-0 z-40 col-span-2 row-start-1 flex items-center justify-between border-b border-line/70 px-5">
+    <div className="grid min-h-screen grid-cols-[232px_1fr] grid-rows-[56px_1fr] max-[860px]:grid-cols-1">
+      <header className="glass sticky top-0 z-40 col-span-2 row-start-1 flex items-center justify-between border-b border-line/70 px-5 max-[860px]:col-span-1 max-[860px]:px-3.5">
         <div className="flex items-center gap-2.5 font-bold text-base">
+          <button
+            className="hidden -ml-1 mr-0.5 h-8.5 w-8.5 place-items-center rounded-md border border-line bg-surface/80 text-base max-[860px]:grid"
+            onClick={() => setNavOpen((o) => !o)}
+            aria-label={navOpen ? 'Close menu' : 'Open menu'}
+          >
+            {navOpen ? '✕' : '☰'}
+          </button>
           <span className="btn-gradient-accent grid h-6.5 w-6.5 place-items-center rounded-lg text-xs text-white shadow-[0_4px_12px_-4px_rgba(var(--shadow-tint),0.6)]">SD</span>
-          SafeDrive
+          <span className="max-[420px]:hidden">SafeDrive</span>
         </div>
 
         {!isStaff ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-[420px]:gap-1">
             <ThemeToggle />
             {profile ? <NotificationBell userId={profile.id} /> : null}
             <NavLink
@@ -147,13 +155,28 @@ export function AppShell() {
         )}
       </header>
 
-      <aside className="glass sticky top-14 row-start-2 h-[calc(100vh-56px)] overflow-y-auto border-r border-line/70 p-3">
+      {navOpen ? (
+        <div
+          className="fixed inset-0 z-40 hidden bg-black/50 backdrop-blur-sm animate-[overlay-in_180ms_ease] max-[860px]:block"
+          onClick={() => setNavOpen(false)}
+        />
+      ) : null}
+
+      <aside
+        className={cn(
+          'glass sticky top-14 row-start-2 h-[calc(100vh-56px)] overflow-y-auto border-r border-line/70 p-3',
+          'max-[860px]:fixed max-[860px]:inset-y-0 max-[860px]:top-0 max-[860px]:z-50 max-[860px]:h-screen max-[860px]:w-64',
+          'max-[860px]:shadow-2xl max-[860px]:transition-transform max-[860px]:duration-300',
+          navOpen ? 'max-[860px]:translate-x-0' : 'max-[860px]:-translate-x-full'
+        )}
+      >
         <nav className="flex flex-col gap-0.5">
           {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.to === '/admin'}
+              onClick={() => setNavOpen(false)}
               className={({ isActive }) =>
                 cn(
                   'relative rounded-lg px-2.5 py-2 text-[13.5px] font-semibold text-muted hover:bg-surface-2 hover:text-ink',
@@ -168,7 +191,7 @@ export function AppShell() {
         </nav>
       </aside>
 
-      <main className="row-start-2 max-w-[1180px] px-8 py-7">
+      <main className="row-start-2 max-w-[1180px] px-8 py-7 max-[860px]:px-4 max-[860px]:py-5">
         <Outlet />
       </main>
     </div>
