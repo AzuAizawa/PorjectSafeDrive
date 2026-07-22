@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Pill } from '@/components/ui/pill';
 import { formatCurrency } from '@/lib/utils';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { Booking, CarBrand, CarModel, Profile } from '@/lib/database.types';
 
 type CompletedBooking = Booking & {
@@ -38,13 +40,22 @@ async function fetchDuePayments() {
   const { data: payouts } = await supabase.from('payments').select('booking_id').eq('payment_type', 'payout');
   const paidOutIds = new Set((payouts ?? []).map((p) => p.booking_id));
 
+  const { data: pendingRefunds } = await supabase
+    .from('payments')
+    .select('booking_id')
+    .eq('payment_type', 'refund')
+    .eq('status', 'pending');
+  const refundInProgressIds = new Set((pendingRefunds ?? []).map((p) => p.booking_id));
+
   const { data: openDisputes } = await supabase.from('disputes').select('booking_id').eq('status', 'open');
   const disputedIds = new Set((openDisputes ?? []).map((d) => d.booking_id));
 
   const all = bookings as CompletedBooking[];
+  const depositEligible = all.filter((b) => b.deposit_paid && !b.deposit_refunded && !disputedIds.has(b.id));
   return {
     payoutsDue: all.filter((b) => !paidOutIds.has(b.id) && !disputedIds.has(b.id)),
-    depositRefundsDue: all.filter((b) => b.deposit_paid && !b.deposit_refunded && !disputedIds.has(b.id)),
+    depositRefundsDue: depositEligible.filter((b) => !refundInProgressIds.has(b.id)),
+    depositRefundsInProgress: depositEligible.filter((b) => refundInProgressIds.has(b.id)),
   };
 }
 
@@ -61,7 +72,15 @@ export function AdminPaymentsPage() {
     },
     onSuccess: invalidate,
   });
-  const markRefunded = useMutation({
+  const sendRefund = useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { data, error } = await supabase.functions.invoke('process-refund', { body: { booking_id: bookingId } });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: invalidate,
+  });
+  const markRefundedManually = useMutation({
     mutationFn: async (bookingId: string) => {
       const { error } = await supabase.rpc('mark_deposit_refunded', { p_booking_id: bookingId });
       if (error) throw error;
@@ -108,7 +127,10 @@ export function AdminPaymentsPage() {
       </div>
 
       <h3 className="mb-2 text-sm font-bold">Deposit refunds due</h3>
-      <Card className="p-0">
+      {sendRefund.isError ? (
+        <p className="mb-2 rounded-md border border-bad bg-bad-soft p-3 text-sm text-bad">{friendlyErrorMessage(sendRefund.error)}</p>
+      ) : null}
+      <Card className="mb-6 p-0">
         <table className="w-full border-collapse">
           <thead>
             <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-muted-2">
@@ -123,7 +145,18 @@ export function AdminPaymentsPage() {
                 <td className="px-4 py-3">{b.renter.first_name} {b.renter.last_name}</td>
                 <td className="tabular px-4 py-3">{formatCurrency(b.deposit_amount)}</td>
                 <td className="px-4 py-3">
-                  <Button size="sm" disabled={markRefunded.isPending} onClick={() => markRefunded.mutate(b.id)}>Mark Refunded</Button>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      className="text-xs font-semibold text-muted underline hover:text-ink"
+                      disabled={markRefundedManually.isPending}
+                      onClick={() => confirm('Only use this if the deposit was returned outside PayMongo.') && markRefundedManually.mutate(b.id)}
+                    >
+                      Mark manually refunded
+                    </button>
+                    <Button size="sm" disabled={sendRefund.isPending} onClick={() => sendRefund.mutate(b.id)}>
+                      {sendRefund.isPending ? 'Sending…' : 'Send Refund via PayMongo'}
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -131,6 +164,32 @@ export function AdminPaymentsPage() {
         </table>
         {data?.depositRefundsDue.length === 0 ? <p className="p-6 text-center text-muted">Nothing due.</p> : null}
       </Card>
+
+      {data && data.depositRefundsInProgress.length > 0 ? (
+        <>
+          <h3 className="mb-2 text-sm font-bold">Refunds in progress</h3>
+          <Card className="p-0">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-muted-2">
+                  <th className="px-4 py-3">Vehicle</th><th className="px-4 py-3">Renter</th>
+                  <th className="px-4 py-3">Deposit amount</th><th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.depositRefundsInProgress.map((b) => (
+                  <tr key={b.id} className="border-t border-line text-[13.5px]">
+                    <td className="px-4 py-3 font-bold">{b.vehicle.model.brand.name} {b.vehicle.model.name}</td>
+                    <td className="px-4 py-3">{b.renter.first_name} {b.renter.last_name}</td>
+                    <td className="tabular px-4 py-3">{formatCurrency(b.deposit_amount)}</td>
+                    <td className="px-4 py-3"><Pill tone="warn">Processing via PayMongo</Pill></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </>
+      ) : null}
     </div>
   );
 }

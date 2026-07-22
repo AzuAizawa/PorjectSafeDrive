@@ -89,6 +89,19 @@ Deno.serve(async (req) => {
       });
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
     }
+  } else if (eventType === 'refund.updated') {
+    // resource here is the refund object itself: { id, attributes: { status } }.
+    // Only terminal statuses matter — 'pending'/'processing' don't change our
+    // own row, which process-refund already set to 'pending' at kickoff.
+    const refundId: string | undefined = resource?.id;
+    const refundStatus: string | undefined = resource?.attributes?.status;
+    if (refundId && (refundStatus === 'succeeded' || refundStatus === 'failed')) {
+      const { error } = await supabase.rpc('confirm_deposit_refund_result', {
+        p_paymongo_refund_id: refundId,
+        p_status: refundStatus,
+      });
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
   }
 
   // Always 200 on anything else (unhandled event types) so PayMongo doesn't retry forever.
