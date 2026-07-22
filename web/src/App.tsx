@@ -22,6 +22,7 @@ import { AdminSettingsPage } from '@/routes/admin/settings';
 import { AdminDashboardPage } from '@/routes/admin/dashboard';
 import { AdminAnalyticsPage } from '@/routes/admin/analytics';
 import { InquirePage } from '@/routes/inquire';
+import { HelpPage } from '@/routes/help';
 import { AdminInquiriesPage } from '@/routes/admin/inquiries';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -67,6 +68,7 @@ export default function App() {
         <Route path="verify" element={<VerifyPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="inquire" element={<InquirePage />} />
+        <Route path="help" element={<HelpPage />} />
 
         <Route path="my-vehicles" element={<MyVehiclesPage />} />
         <Route path="my-vehicles/new" element={<AddVehiclePage />} />

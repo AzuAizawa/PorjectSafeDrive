@@ -96,6 +96,13 @@ export function AppShell() {
                 >
                   🪪 Get Verified
                 </NavLink>
+                <NavLink
+                  to="/help"
+                  className="block rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  ❓ Help
+                </NavLink>
                 <button
                   className="block w-full rounded-md px-2.5 py-2 text-left text-[13px] font-medium hover:bg-surface-2"
                   onClick={toggleLister}

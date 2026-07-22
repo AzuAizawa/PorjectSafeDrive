@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
+import { Pill } from '@/components/ui/pill';
 import { formatCurrency } from '@/lib/utils';
 
 async function fetchDashboardStats() {
@@ -25,8 +26,26 @@ async function fetchDashboardStats() {
   return { totalUsers, pendingVerifications, activeListings, activeBookings, revenue, openDisputes, pendingVehicles };
 }
 
+interface CronHealthRow {
+  job_name: string;
+  last_run: string | null;
+  last_status: string | null;
+}
+
+async function fetchCronHealth() {
+  const { data, error } = await supabase.rpc('get_cron_health');
+  if (error) throw error;
+  return data as CronHealthRow[];
+}
+
+const JOB_LABELS: Record<string, string> = {
+  'expire-stale-bookings': 'Expire stale bookings (hourly)',
+  'auto-complete-bookings': 'Auto-complete bookings (daily)',
+};
+
 export function AdminDashboardPage() {
   const { data } = useQuery({ queryKey: ['admin-dashboard'], queryFn: fetchDashboardStats });
+  const { data: cronHealth } = useQuery({ queryKey: ['cron-health'], queryFn: fetchCronHealth });
 
   return (
     <div>
@@ -44,11 +63,37 @@ export function AdminDashboardPage() {
         <Stat label="Commission Revenue" value={data ? formatCurrency(data.revenue) : '—'} />
       </div>
 
-      <Card className="p-5">
+      <Card className="mb-5 p-5">
         <h3 className="mb-3 text-sm font-bold">Needs your attention</h3>
         <Row label={`${data?.pendingVerifications ?? 0} pending verifications`} to="/admin/users" />
         <Row label={`${data?.pendingVehicles ?? 0} vehicles pending approval`} to="/admin/vehicles" />
         <Row label={`${data?.openDisputes ?? 0} open disputes`} to="/admin/disputes" />
+      </Card>
+
+      <Card className="p-5">
+        <h3 className="mb-3 text-sm font-bold">Scheduled jobs</h3>
+        {cronHealth?.map((job) => {
+          const stale = !job.last_run || Date.now() - new Date(job.last_run).getTime() > 26 * 3_600_000;
+          const failed = job.last_status && job.last_status !== 'succeeded';
+          return (
+            <div key={job.job_name} className="flex items-center justify-between border-b border-line py-3 text-sm last:border-none">
+              <div>
+                <div className="font-semibold">{JOB_LABELS[job.job_name] ?? job.job_name}</div>
+                <div className="text-xs text-muted">
+                  {job.last_run ? `Last ran ${new Date(job.last_run).toLocaleString()}` : 'Never run yet'}
+                </div>
+              </div>
+              {failed ? (
+                <Pill tone="bad">Failed</Pill>
+              ) : stale ? (
+                <Pill tone="warn">No recent run</Pill>
+              ) : (
+                <Pill tone="good">Healthy</Pill>
+              )}
+            </div>
+          );
+        })}
+        {!cronHealth || cronHealth.length === 0 ? <p className="text-sm text-muted">No job history yet.</p> : null}
       </Card>
     </div>
   );
