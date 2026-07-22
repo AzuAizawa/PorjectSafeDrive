@@ -5,16 +5,21 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BookingStatusPill } from '@/components/ui/pill';
 import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
+import { ReportIssueDialog } from '@/components/report-issue-dialog';
+import { RateBookingDialog } from '@/components/rate-booking-dialog';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { previewCancellation } from '@/lib/cancellation';
+import { signedUrl } from '@/lib/storage';
 import type { Booking, CarModel, CarBrand } from '@/lib/database.types';
 
-type BookingRow = Booking & { vehicle: { plate_number: string; model: CarModel & { brand: CarBrand } } };
+type BookingRow = Booking & {
+  vehicle: { plate_number: string; rental_agreement_path: string | null; model: CarModel & { brand: CarBrand } };
+};
 
 async function fetchMyBookings(renterId: string): Promise<BookingRow[]> {
   const { data, error } = await supabase
     .from('bookings')
-    .select('*, vehicle:vehicles(plate_number, model:car_models(*, brand:car_brands(*)))')
+    .select('*, vehicle:vehicles(plate_number, rental_agreement_path, model:car_models(*, brand:car_brands(*)))')
     .eq('renter_id', renterId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -33,10 +38,18 @@ async function fetchCancellationSettings() {
   };
 }
 
+async function fetchMyReviewedBookingIds(reviewerId: string) {
+  const { data, error } = await supabase.from('reviews').select('booking_id').eq('reviewer_id', reviewerId);
+  if (error) throw error;
+  return new Set(data.map((r) => r.booking_id));
+}
+
 export function MyBookingsPage() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
   const cancelDialog = useConfirmTarget<string>();
+  const reportDialog = useConfirmTarget<string>();
+  const rateDialog = useConfirmTarget<string>();
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings', 'mine', profile?.id],
@@ -44,6 +57,11 @@ export function MyBookingsPage() {
     enabled: !!profile,
   });
   const { data: settings } = useQuery({ queryKey: ['cancellation-settings'], queryFn: fetchCancellationSettings });
+  const { data: reviewedIds } = useQuery({
+    queryKey: ['my-reviewed-bookings', profile?.id],
+    queryFn: () => fetchMyReviewedBookingIds(profile!.id),
+    enabled: !!profile,
+  });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bookings'] });
 
@@ -82,6 +100,7 @@ export function MyBookingsPage() {
 
   const targetBooking = bookings?.find((b) => b.id === cancelDialog.target);
   const preview = targetBooking && settings ? previewCancellation(targetBooking, settings) : null;
+  const rateTargetBooking = bookings?.find((b) => b.id === rateDialog.target);
 
   return (
     <div>
@@ -114,7 +133,7 @@ export function MyBookingsPage() {
                 ) : null}
               </div>
 
-              <div className="mt-3.5 flex gap-2">
+              <div className="mt-3.5 flex flex-wrap gap-2">
                 {b.status === 'pending_payment' ? (
                   <Button
                     size="sm"
@@ -140,11 +159,29 @@ export function MyBookingsPage() {
                 ) : null}
                 {b.status === 'active' ? (
                   <>
-                    <Button variant="danger" size="sm">Report an Issue</Button>
+                    <Button variant="danger" size="sm" onClick={() => reportDialog.open(b.id)}>Report an Issue</Button>
                     <Button size="sm" onClick={() => markComplete.mutate(b.id)}>Mark Complete</Button>
                   </>
                 ) : null}
-                {b.status === 'completed' ? <Button variant="secondary" size="sm">★ Rate this rental</Button> : null}
+                {b.status === 'completed' ? (
+                  reviewedIds?.has(b.id) ? (
+                    <span className="self-center text-xs font-semibold text-muted">★ Rated — thanks!</span>
+                  ) : (
+                    <Button variant="secondary" size="sm" onClick={() => rateDialog.open(b.id)}>★ Rate this rental</Button>
+                  )
+                ) : null}
+                {b.vehicle.rental_agreement_path && ['active', 'fully_paid', 'completed'].includes(b.status) ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={async () => {
+                      const url = await signedUrl('vehicle-documents', b.vehicle.rental_agreement_path!);
+                      window.open(url, '_blank');
+                    }}
+                  >
+                    ⬇ Rental agreement
+                  </Button>
+                ) : null}
               </div>
             </div>
           </Card>
@@ -164,6 +201,21 @@ export function MyBookingsPage() {
         pending={cancel.isPending}
         onConfirm={() => cancelDialog.target && cancel.mutate(cancelDialog.target)}
         onCancel={cancelDialog.close}
+      />
+
+      <ReportIssueDialog
+        bookingId={reportDialog.target}
+        onClose={reportDialog.close}
+        onSubmitted={reportDialog.close}
+      />
+
+      <RateBookingDialog
+        target={rateTargetBooking ? { bookingId: rateTargetBooking.id, revieweeId: rateTargetBooking.owner_id } : null}
+        onClose={rateDialog.close}
+        onSubmitted={() => {
+          queryClient.invalidateQueries({ queryKey: ['my-reviewed-bookings'] });
+          rateDialog.close();
+        }}
       />
     </div>
   );

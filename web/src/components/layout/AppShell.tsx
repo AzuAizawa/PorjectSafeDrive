@@ -43,7 +43,7 @@ export function AppShell() {
 
   return (
     <div className="grid min-h-screen grid-cols-[232px_1fr] grid-rows-[56px_1fr]">
-      <header className="col-span-2 row-start-1 flex items-center justify-between border-b border-line bg-surface px-5">
+      <header className="sticky top-0 z-40 col-span-2 row-start-1 flex items-center justify-between border-b border-line bg-surface px-5">
         <div className="flex items-center gap-2.5 font-bold text-base">
           <span className="grid h-6.5 w-6.5 place-items-center rounded-md bg-accent text-xs text-white">SD</span>
           SafeDrive
@@ -58,7 +58,7 @@ export function AppShell() {
               {profile?.first_name?.[0] ?? profile?.email?.[0]?.toUpperCase() ?? '·'}
             </button>
             {menuOpen ? (
-              <div className="absolute right-0 top-11 w-52 rounded-md border border-line bg-surface p-1.5 shadow-lg">
+              <div className="absolute right-0 top-11 z-50 w-52 rounded-md border border-line bg-surface p-1.5 shadow-lg">
                 <NavLink
                   to="/profile"
                   className="block rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { publicUrl } from '@/lib/storage';
+import { publicUrl, signedUrl } from '@/lib/storage';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
@@ -37,6 +37,11 @@ export function CarDetailPage() {
 
   const { data: vehicle } = useQuery({ queryKey: ['vehicle', id], queryFn: () => fetchVehicle(id!), enabled: !!id });
   const { data: settings } = useQuery({ queryKey: ['platform_settings'], queryFn: fetchSettings });
+  const { data: rentalAgreementUrl } = useQuery({
+    queryKey: ['rental-agreement', vehicle?.rental_agreement_path],
+    queryFn: () => signedUrl('vehicle-documents', vehicle!.rental_agreement_path!),
+    enabled: !!vehicle?.rental_agreement_path,
+  });
 
   const pricing = useMemo(() => {
     if (!vehicle || !settings || !startDate || !endDate) return null;
@@ -110,6 +115,23 @@ export function CarDetailPage() {
             <Card className="mt-3.5 p-5">
               <h3 className="mb-2 text-sm font-bold">From the owner</h3>
               <p className="text-muted">{vehicle.additional_info}</p>
+            </Card>
+          ) : null}
+
+          {vehicle.rental_agreement_path ? (
+            <Card className="mt-3.5 flex items-center justify-between p-5">
+              <div>
+                <h3 className="text-sm font-bold">Rental agreement</h3>
+                <p className="mt-0.5 text-xs text-muted">Standard SafeDrive rental terms, uploaded by the owner.</p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!rentalAgreementUrl}
+                onClick={() => rentalAgreementUrl && window.open(rentalAgreementUrl, '_blank')}
+              >
+                ⬇ Download
+              </Button>
             </Card>
           ) : null}
         </div>

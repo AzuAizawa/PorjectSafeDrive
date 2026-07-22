@@ -36,3 +36,7 @@ export function vehicleImagePath(vehicleId: string, index: number, file: File) {
 export function vehicleDocPath(vehicleId: string, kind: 'orcr' | 'rental-agreement', file: File) {
   return `${vehicleId}/${kind}/${Date.now()}.${extOf(file)}`;
 }
+
+export function disputeEvidencePath(bookingId: string, index: number, file: File) {
+  return `${bookingId}/${index}-${Date.now()}.${extOf(file)}`;
+}

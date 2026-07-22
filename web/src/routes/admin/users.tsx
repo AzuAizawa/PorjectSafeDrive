@@ -21,9 +21,9 @@ async function fetchLatestSubmission(profileId: string) {
     .eq('profile_id', profileId)
     .order('submitted_at', { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
   if (error) throw error;
-  return data as VerificationSubmission;
+  return data as VerificationSubmission | null;
 }
 
 const IMAGE_KEYS: (keyof VerificationSubmission)[] = [
@@ -42,33 +42,42 @@ function statusPill(status: Profile['verified_status']) {
   return <Pill tone="muted">Unverified</Pill>;
 }
 
+function accountPill(status: Profile['account_status']) {
+  if (status === 'suspended') return <Pill tone="warn">Suspended</Pill>;
+  if (status === 'banned') return <Pill tone="bad">Banned</Pill>;
+  return null;
+}
+
 export function AdminUsersPage() {
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Profile | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [rejectReason, setRejectReason] = useState('');
 
   const { data: users } = useQuery({ queryKey: ['admin-users'], queryFn: fetchUsers });
   const { data: submission } = useQuery({
-    queryKey: ['verification-submission', selectedId],
-    queryFn: () => fetchLatestSubmission(selectedId!),
-    enabled: !!selectedId,
+    queryKey: ['verification-submission', selected?.id],
+    queryFn: () => fetchLatestSubmission(selected!.id),
+    enabled: !!selected,
   });
 
-  async function openReview(profileId: string) {
-    setSelectedId(profileId);
+  async function openUser(user: Profile) {
+    setSelected(user);
     setRejectReason('');
-    const sub = await fetchLatestSubmission(profileId);
-    const urls: Record<string, string> = {};
-    for (const key of IMAGE_KEYS) {
-      urls[key] = await signedUrl('user-verification', sub[key] as string);
+    setImageUrls({});
+    if (user.verified_status === 'pending') {
+      const sub = await fetchLatestSubmission(user.id);
+      if (sub) {
+        const urls: Record<string, string> = {};
+        for (const key of IMAGE_KEYS) urls[key] = await signedUrl('user-verification', sub[key] as string);
+        setImageUrls(urls);
+      }
     }
-    setImageUrls(urls);
   }
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-    setSelectedId(null);
+    setSelected(null);
   };
 
   const approve = useMutation({
@@ -85,6 +94,20 @@ export function AdminUsersPage() {
     },
     onSuccess: invalidate,
   });
+  const setStatus = useMutation({
+    mutationFn: async (status: 'active' | 'suspended' | 'banned') => {
+      const { error } = await supabase.rpc('set_account_status', { p_profile_id: selected!.id, p_status: status });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+  const clearStrikes = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc('clear_strikes', { p_profile_id: selected!.id });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
 
   return (
     <div>
@@ -94,14 +117,14 @@ export function AdminUsersPage() {
         <p className="mt-1.5 text-muted">Review verification submissions and manage accounts.</p>
       </div>
 
-      <div className="grid grid-cols-[1.4fr_1fr] gap-5 items-start">
+      <div className="grid grid-cols-[1.4fr_1fr] items-start gap-5">
         <div className="rounded-2xl border border-line bg-surface">
           <table className="w-full border-collapse">
             <thead>
               <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-muted-2">
                 <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Verification</th>
+                <th className="px-4 py-3">Account</th>
                 <th className="px-4 py-3">Strikes</th>
                 <th className="px-4 py-3">Joined</th>
                 <th className="px-4 py-3" />
@@ -110,15 +133,16 @@ export function AdminUsersPage() {
             <tbody>
               {users?.map((u) => (
                 <tr key={u.id} className="border-t border-line text-[13.5px]">
-                  <td className="px-4 py-3 font-bold">{u.first_name ?? '—'} {u.last_name ?? ''}</td>
-                  <td className="px-4 py-3">{u.email}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-bold">{u.first_name ?? '—'} {u.last_name ?? ''}</div>
+                    <div className="text-xs text-muted">{u.email}</div>
+                  </td>
                   <td className="px-4 py-3">{statusPill(u.verified_status)}</td>
+                  <td className="px-4 py-3">{accountPill(u.account_status) ?? <span className="text-xs text-muted">Active</span>}</td>
                   <td className="tabular px-4 py-3">{u.account_flagged ? <Pill tone="bad">⚠ {u.strike_count}</Pill> : u.strike_count}</td>
                   <td className="tabular px-4 py-3">{formatDate(u.created_at)}</td>
                   <td className="px-4 py-3">
-                    {u.verified_status === 'pending' ? (
-                      <Button size="sm" variant="secondary" onClick={() => openReview(u.id)}>Review</Button>
-                    ) : null}
+                    <Button size="sm" variant="secondary" onClick={() => openUser(u)}>Manage</Button>
                   </td>
                 </tr>
               ))}
@@ -126,43 +150,76 @@ export function AdminUsersPage() {
           </table>
         </div>
 
-        {selectedId && submission ? (
+        {selected ? (
           <Card className="sticky top-[76px] p-5">
-            <h3 className="mb-3 text-sm font-bold">Verification Review</h3>
-            <dl className="mb-4 grid grid-cols-2 gap-3 text-[13px]">
-              <div><dt className="text-xs text-muted">Full name</dt><dd className="font-semibold">{submission.first_name} {submission.middle_name} {submission.last_name}</dd></div>
-              <div><dt className="text-xs text-muted">Birthday</dt><dd className="font-semibold">{formatDate(submission.birthday)}</dd></div>
-              <div><dt className="text-xs text-muted">Phone</dt><dd className="font-semibold">{submission.phone}</dd></div>
-              <div><dt className="text-xs text-muted">Address</dt><dd className="font-semibold">{submission.address}</dd></div>
-              <div><dt className="text-xs text-muted">Driver's license #</dt><dd className="tabular font-semibold">{submission.driver_license_number}</dd></div>
-              <div><dt className="text-xs text-muted">National ID #</dt><dd className="tabular font-semibold">{submission.national_id_number}</dd></div>
-            </dl>
-            <div className="mb-4 grid grid-cols-3 gap-2">
-              {IMAGE_KEYS.map((key) => (
-                <a key={key} href={imageUrls[key]} target="_blank" rel="noreferrer" className="block rounded-md border border-line bg-surface-2 p-2 text-center text-[10px] text-muted">
-                  {imageUrls[key] ? <img src={imageUrls[key]} className="mb-1 h-16 w-full rounded object-cover" /> : null}
-                  {key.replace('_path', '').replace(/_/g, ' ')}
-                </a>
-              ))}
-            </div>
-            <input
-              className="input-base mb-2"
-              placeholder="Rejection reason (if rejecting)"
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-            />
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="danger"
-                size="sm"
-                disabled={!rejectReason || reject.isPending}
-                onClick={() => reject.mutate({ submissionId: submission.id, reason: rejectReason })}
-              >
-                Reject
-              </Button>
-              <Button size="sm" disabled={approve.isPending} onClick={() => approve.mutate(submission.id)}>
-                Approve
-              </Button>
+            <h3 className="mb-3 text-sm font-bold">{selected.first_name} {selected.last_name}</h3>
+
+            {selected.verified_status === 'pending' && submission ? (
+              <>
+                <dl className="mb-4 grid grid-cols-2 gap-3 text-[13px]">
+                  <div><dt className="text-xs text-muted">Full name</dt><dd className="font-semibold">{submission.first_name} {submission.middle_name} {submission.last_name}</dd></div>
+                  <div><dt className="text-xs text-muted">Birthday</dt><dd className="font-semibold">{formatDate(submission.birthday)}</dd></div>
+                  <div><dt className="text-xs text-muted">Phone</dt><dd className="font-semibold">{submission.phone}</dd></div>
+                  <div><dt className="text-xs text-muted">Address</dt><dd className="font-semibold">{submission.address}</dd></div>
+                  <div><dt className="text-xs text-muted">Driver's license #</dt><dd className="tabular font-semibold">{submission.driver_license_number}</dd></div>
+                  <div><dt className="text-xs text-muted">National ID #</dt><dd className="tabular font-semibold">{submission.national_id_number}</dd></div>
+                </dl>
+                <div className="mb-4 grid grid-cols-3 gap-2">
+                  {IMAGE_KEYS.map((key) => (
+                    <a key={key} href={imageUrls[key]} target="_blank" rel="noreferrer" className="block rounded-md border border-line bg-surface-2 p-2 text-center text-[10px] text-muted">
+                      {imageUrls[key] ? <img src={imageUrls[key]} className="mb-1 h-16 w-full rounded object-cover" /> : null}
+                      {key.replace('_path', '').replace(/_/g, ' ')}
+                    </a>
+                  ))}
+                </div>
+                <input
+                  className="input-base mb-2"
+                  placeholder="Rejection reason (if rejecting)"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                />
+                <div className="mb-4 flex justify-end gap-2">
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={!rejectReason || reject.isPending}
+                    onClick={() => reject.mutate({ submissionId: submission.id, reason: rejectReason })}
+                  >
+                    Reject
+                  </Button>
+                  <Button size="sm" disabled={approve.isPending} onClick={() => approve.mutate(submission.id)}>
+                    Approve
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="mb-4 text-sm text-muted">{statusPill(selected.verified_status)}</p>
+            )}
+
+            <div className="border-t border-line pt-4">
+              <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Account Standing</h4>
+              <div className="mb-3 flex items-center justify-between text-sm">
+                <span>Strikes: {selected.strike_count}{selected.account_flagged ? ' — flagged for review' : ''}</span>
+                {selected.strike_count > 0 ? (
+                  <Button size="sm" variant="secondary" disabled={clearStrikes.isPending} onClick={() => clearStrikes.mutate()}>
+                    Clear Strikes
+                  </Button>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {selected.account_status !== 'active' ? (
+                  <Button size="sm" disabled={setStatus.isPending} onClick={() => setStatus.mutate('active')}>Reactivate</Button>
+                ) : (
+                  <>
+                    <Button size="sm" variant="secondary" disabled={setStatus.isPending} onClick={() => setStatus.mutate('suspended')}>
+                      Suspend
+                    </Button>
+                    <Button size="sm" variant="danger" disabled={setStatus.isPending} onClick={() => setStatus.mutate('banned')}>
+                      Ban
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </Card>
         ) : null}
