@@ -6,6 +6,7 @@ import { publicUrl, signedUrl } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/ui/avatar';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { formatCurrency } from '@/lib/utils';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
@@ -15,7 +16,7 @@ async function fetchVehicle(id: string): Promise<VehicleListing> {
   const { data, error } = await supabase
     .from('vehicles')
     .select(
-      `*, model:car_models(*, brand:car_brands(*)), owner:profiles(id, first_name, last_name),
+      `*, model:car_models(*, brand:car_brands(*)), owner:profiles(id, first_name, last_name, avatar_url),
        vehicle_images(storage_path, sort_order)`
     )
     .eq('id', id)
@@ -127,12 +128,15 @@ export function CarDetailPage() {
               <h1 className="text-2xl">
                 {vehicle.model.brand.name} {vehicle.model.name}
               </h1>
-              <p className="mt-1.5 text-muted">
-                Listed by <strong>{vehicle.owner.first_name} {vehicle.owner.last_name}</strong>
-                {averageRating !== null ? (
-                  <> · <span className="font-semibold text-warn">★ {averageRating.toFixed(1)}</span> ({reviews!.length})</>
-                ) : null}
-              </p>
+              <div className="mt-2 flex items-center gap-2.5">
+                <Avatar avatarPath={vehicle.owner.avatar_url} firstName={vehicle.owner.first_name} lastName={vehicle.owner.last_name} size="sm" />
+                <p className="text-muted">
+                  Listed by <strong>{vehicle.owner.first_name} {vehicle.owner.last_name}</strong>
+                  {averageRating !== null ? (
+                    <> · <span className="font-semibold text-warn">★ {averageRating.toFixed(1)}</span> ({reviews!.length})</>
+                  ) : null}
+                </p>
+              </div>
             </div>
             <button className="text-xs font-semibold text-muted underline hover:text-bad" onClick={() => setReportOpen(true)}>
               Report this listing

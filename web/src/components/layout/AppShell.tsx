@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { Avatar } from '@/components/ui/avatar';
 
 const renterNav = [
   { to: '/browse', label: 'Browse Cars' },
@@ -78,10 +79,17 @@ export function AppShell() {
             </NavLink>
             <div className="relative">
             <button
-              className="btn-gradient-accent grid h-8.5 w-8.5 place-items-center rounded-full text-xs font-bold text-white shadow-[0_4px_12px_-4px_rgba(var(--shadow-tint),0.6)] hover:-translate-y-px"
+              className="rounded-full outline-none hover:-translate-y-px"
               onClick={() => setMenuOpen((o) => !o)}
+              aria-label="Profile menu"
             >
-              {profile?.first_name?.[0] ?? profile?.email?.[0]?.toUpperCase() ?? '·'}
+              {profile?.avatar_url ? (
+                <Avatar avatarPath={profile.avatar_url} firstName={profile.first_name} lastName={profile.last_name} size="sm" />
+              ) : (
+                <span className="btn-gradient-accent grid h-8.5 w-8.5 place-items-center rounded-full text-xs font-bold text-white shadow-[0_4px_12px_-4px_rgba(var(--shadow-tint),0.6)]">
+                  {profile?.first_name?.[0] ?? profile?.email?.[0]?.toUpperCase() ?? '·'}
+                </span>
+              )}
             </button>
             {menuOpen ? (
               <div className="glass animate-[dropdown-in_160ms_cubic-bezier(0.22,1,0.36,1)] absolute right-0 top-11 z-50 w-52 rounded-xl border border-line/70 p-1.5 shadow-xl">

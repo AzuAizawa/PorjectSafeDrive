@@ -44,3 +44,14 @@ export function BookingStatusPill({ status }: { status: string }) {
   const entry = BOOKING_STATUS_MAP[status] ?? { label: status, tone: 'muted' as const };
   return <Pill tone={entry.tone}>{entry.label}</Pill>;
 }
+
+// Same "★ 4.8 (12)" format everywhere a rating shows up, so a rating with
+// zero visible reviews reads as "No ratings yet" instead of "★ 0.0 (0)".
+export function RatingBadge({ avg, count }: { avg: number; count: number }) {
+  if (count === 0) return <span className="text-xs text-muted">No ratings yet</span>;
+  return (
+    <span className="text-xs font-semibold text-warn">
+      ★ {avg.toFixed(1)} <span className="font-normal text-muted">({count})</span>
+    </span>
+  );
+}

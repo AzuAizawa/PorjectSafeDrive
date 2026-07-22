@@ -22,12 +22,23 @@ export function CameraCapture({ label, onCapture, captured }: CameraCaptureProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The <video> element only mounts once `active` is true (it doesn't exist
+  // yet while getUserMedia() is being awaited), so assigning srcObject
+  // straight after the stream resolves was landing on a still-null ref —
+  // that's why there was no preview and Capture produced a blank frame.
+  // Doing the assignment in an effect keyed on `active` guarantees the
+  // video element exists by the time we attach the stream to it.
+  useEffect(() => {
+    if (active && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [active]);
+
   async function startCamera() {
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
       setActive(true);
     } catch {
       setError('Could not access your camera. Check your browser permissions and try again.');
@@ -42,7 +53,11 @@ export function CameraCapture({ label, onCapture, captured }: CameraCaptureProps
 
   function capture() {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+      setError('Camera is still starting up — give it a second and try Capture again.');
+      return;
+    }
+    setError(null);
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -69,7 +84,7 @@ export function CameraCapture({ label, onCapture, captured }: CameraCaptureProps
   return (
     <div>
       <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted">{label}</p>
-      <div className="overflow-hidden rounded-md border-2 border-dashed border-line bg-surface-2">
+      <div className="overflow-hidden rounded-xl border-2 border-dashed border-line bg-surface-2/70 backdrop-blur-sm">
         {captured && previewUrl ? (
           <div className="relative">
             <img src={previewUrl} alt={label} className="aspect-video w-full object-cover" />
@@ -81,6 +96,9 @@ export function CameraCapture({ label, onCapture, captured }: CameraCaptureProps
           <div className="relative">
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video ref={videoRef} autoPlay playsInline muted className="aspect-video w-full scale-x-[-1] object-cover" />
+            <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-bad" /> LIVE
+            </span>
             <Button type="button" size="sm" className="absolute bottom-2 left-1/2 -translate-x-1/2" onClick={capture}>
               📸 Capture
             </Button>
@@ -88,7 +106,7 @@ export function CameraCapture({ label, onCapture, captured }: CameraCaptureProps
         ) : (
           <button
             type="button"
-            className="flex aspect-video w-full flex-col items-center justify-center gap-1 text-xs font-semibold text-muted"
+            className="flex aspect-video w-full flex-col items-center justify-center gap-1 text-xs font-semibold text-muted hover:text-accent"
             onClick={startCamera}
           >
             📷 Click to open camera

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 
 interface RateBookingDialogProps {
   target: { bookingId: string; revieweeId: string } | null;
@@ -35,8 +36,14 @@ export function RateBookingDialog({ target, onClose, onSubmitted }: RateBookingD
   if (!target) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 backdrop-blur-sm animate-[overlay-in_180ms_ease]"
+      onClick={onClose}
+    >
+      <div
+        className="glass w-full max-w-md animate-[modal-in_200ms_cubic-bezier(0.22,1,0.36,1)] rounded-2xl border border-line/70 p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className="mb-3 text-base font-bold">Rate this rental</h3>
         <div className="mb-3 flex gap-1 text-2xl">
           {[1, 2, 3, 4, 5].map((n) => (
@@ -57,7 +64,7 @@ export function RateBookingDialog({ target, onClose, onSubmitted }: RateBookingD
           value={comment}
           onChange={(e) => setComment(e.target.value)}
         />
-        {submit.isError ? <p className="mb-2 text-sm text-bad">{(submit.error as Error).message}</p> : null}
+        {submit.isError ? <p className="mb-2 text-sm text-bad">{friendlyErrorMessage(submit.error)}</p> : null}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={onClose}>Never mind</Button>
           <Button size="sm" disabled={rating === 0 || submit.isPending} onClick={() => submit.mutate()}>

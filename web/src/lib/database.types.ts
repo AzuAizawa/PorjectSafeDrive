@@ -26,6 +26,7 @@ export interface Profile {
   phone: string | null;
   address: string | null;
   birthday: string | null;
+  avatar_url: string | null;
   role: 'user' | 'support' | 'admin';
   is_lister: boolean;
   verified_status: VerifiedStatus;
@@ -247,6 +248,6 @@ export interface ListingReport {
 // Convenience joined shape used by Browse/Car Detail — vehicle + model + brand + owner + cover image.
 export interface VehicleListing extends Vehicle {
   model: CarModel & { brand: CarBrand };
-  owner: Pick<Profile, 'id' | 'first_name' | 'last_name'>;
+  owner: Pick<Profile, 'id' | 'first_name' | 'last_name' | 'avatar_url'>;
   cover_image_url: string | null;
 }

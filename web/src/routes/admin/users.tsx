@@ -6,7 +6,9 @@ import { signedUrl } from '@/lib/storage';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
+import { Avatar } from '@/components/ui/avatar';
 import { formatDate } from '@/lib/utils';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { Profile, VerificationSubmission } from '@/lib/database.types';
 
 async function fetchUsers() {
@@ -84,8 +86,26 @@ export function AdminUsersPage() {
   };
 
   const approve = useMutation({
-    mutationFn: async (submissionId: string) => {
-      const { error } = await supabase.rpc('approve_verification', { p_submission_id: submissionId });
+    mutationFn: async (vars: { submissionId: string; profileId: string; selfieFacePath: string }) => {
+      // The face-only selfie lives in the private user-verification bucket
+      // (ID-document-adjacent). On approval, copy just that one file into
+      // the public avatars bucket so it can double as the user's visible
+      // profile picture for the other party in a booking — see 027_profile_avatar.sql.
+      const { data: blob, error: downloadError } = await supabase.storage
+        .from('user-verification')
+        .download(vars.selfieFacePath);
+      if (downloadError) throw downloadError;
+
+      const avatarPath = `${vars.profileId}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(avatarPath, blob, { upsert: true, contentType: blob.type || 'image/jpeg' });
+      if (uploadError) throw uploadError;
+
+      const { error } = await supabase.rpc('approve_verification', {
+        p_submission_id: vars.submissionId,
+        p_avatar_path: avatarPath,
+      });
       if (error) throw error;
     },
     onSuccess: invalidate,
@@ -137,8 +157,13 @@ export function AdminUsersPage() {
               {users?.map((u) => (
                 <tr key={u.id} className="border-t border-line text-[13.5px]">
                   <td className="px-4 py-3">
-                    <div className="font-bold">{u.first_name ?? '—'} {u.last_name ?? ''}</div>
-                    <div className="text-xs text-muted">{u.email}</div>
+                    <div className="flex items-center gap-2.5">
+                      <Avatar avatarPath={u.avatar_url} firstName={u.first_name} lastName={u.last_name} size="sm" />
+                      <div>
+                        <div className="font-bold">{u.first_name ?? '—'} {u.last_name ?? ''}</div>
+                        <div className="text-xs text-muted">{u.email}</div>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3">{statusPill(u.verified_status)}</td>
                   <td className="px-4 py-3">{accountPill(u.account_status) ?? <span className="text-xs text-muted">Active</span>}</td>
@@ -155,7 +180,10 @@ export function AdminUsersPage() {
 
         {selected ? (
           <Card className="sticky top-[76px] p-5">
-            <h3 className="mb-3 text-sm font-bold">{selected.first_name} {selected.last_name}</h3>
+            <div className="mb-3 flex items-center gap-2.5">
+              <Avatar avatarPath={selected.avatar_url} firstName={selected.first_name} lastName={selected.last_name} />
+              <h3 className="text-sm font-bold">{selected.first_name} {selected.last_name}</h3>
+            </div>
 
             {selected.verified_status === 'pending' && submission ? (
               <>
@@ -196,10 +224,21 @@ export function AdminUsersPage() {
                   >
                     Reject
                   </Button>
-                  <Button size="sm" disabled={approve.isPending} onClick={() => approve.mutate(submission.id)}>
-                    Approve
+                  <Button
+                    size="sm"
+                    disabled={approve.isPending}
+                    onClick={() =>
+                      approve.mutate({
+                        submissionId: submission.id,
+                        profileId: selected.id,
+                        selfieFacePath: submission.selfie_face_path,
+                      })
+                    }
+                  >
+                    {approve.isPending ? 'Approving…' : 'Approve'}
                   </Button>
                 </div>
+                {approve.isError ? <p className="mb-3 text-xs text-bad">{friendlyErrorMessage(approve.error)}</p> : null}
               </>
             ) : (
               <p className="mb-4 text-sm text-muted">{statusPill(selected.verified_status)}</p>

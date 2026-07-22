@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TwoFactorSection } from '@/components/two-factor-section';
+import { Avatar } from '@/components/ui/avatar';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 
 const schema = z.object({
@@ -98,7 +99,17 @@ export function ProfilePage() {
       </div>
 
       <Card className="max-w-lg p-5">
-        <h3 className="mb-3 text-sm font-bold">Verified identity</h3>
+        <div className="mb-3 flex items-center gap-3">
+          <Avatar avatarPath={profile?.avatar_url} firstName={profile?.first_name} lastName={profile?.last_name} size="lg" />
+          <div>
+            <h3 className="text-sm font-bold">Verified identity</h3>
+            <p className="text-xs text-muted">
+              {profile?.avatar_url
+                ? 'Your face-only selfie is shown to renters/owners as your profile picture.'
+                : "Your profile picture is set from your selfie once you're verified."}
+            </p>
+          </div>
+        </div>
         <dl className="mb-5 grid grid-cols-2 gap-3 text-[13px]">
           <div><dt className="text-xs text-muted">First name</dt><dd className="font-semibold">{profile?.first_name || '—'}</dd></div>
           <div><dt className="text-xs text-muted">Last name</dt><dd className="font-semibold">{profile?.last_name || '—'}</dd></div>

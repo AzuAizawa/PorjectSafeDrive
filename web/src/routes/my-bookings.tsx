@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookingStatusPill } from '@/components/ui/pill';
+import { BookingStatusPill, RatingBadge } from '@/components/ui/pill';
+import { Avatar } from '@/components/ui/avatar';
 import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
 import { ReportIssueDialog } from '@/components/report-issue-dialog';
 import { RateBookingDialog } from '@/components/rate-booking-dialog';
@@ -13,16 +14,21 @@ import { BookingChat } from '@/components/booking-chat';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { previewCancellation } from '@/lib/cancellation';
 import { signedUrl } from '@/lib/storage';
-import type { Booking, CarModel, CarBrand } from '@/lib/database.types';
+import { fetchRatingSummaries } from '@/lib/ratings';
+import type { Booking, CarModel, CarBrand, Profile } from '@/lib/database.types';
 
 type BookingRow = Booking & {
   vehicle: { plate_number: string; rental_agreement_path: string | null; model: CarModel & { brand: CarBrand } };
+  owner: Pick<Profile, 'first_name' | 'last_name' | 'avatar_url'>;
 };
 
 async function fetchMyBookings(renterId: string): Promise<BookingRow[]> {
   const { data, error } = await supabase
     .from('bookings')
-    .select('*, vehicle:vehicles(plate_number, rental_agreement_path, model:car_models(*, brand:car_brands(*)))')
+    .select(
+      `*, vehicle:vehicles(plate_number, rental_agreement_path, model:car_models(*, brand:car_brands(*))),
+       owner:profiles!bookings_owner_id_fkey(first_name, last_name, avatar_url)`
+    )
     .eq('renter_id', renterId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -65,6 +71,12 @@ export function MyBookingsPage() {
     queryKey: ['my-reviewed-bookings', profile?.id],
     queryFn: () => fetchMyReviewedBookingIds(profile!.id),
     enabled: !!profile,
+  });
+  const ownerIds = bookings?.map((b) => b.owner_id) ?? [];
+  const { data: ownerRatings } = useQuery({
+    queryKey: ['rating-summaries', 'owners', ownerIds],
+    queryFn: () => fetchRatingSummaries(ownerIds),
+    enabled: ownerIds.length > 0,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['bookings'] });
@@ -130,6 +142,14 @@ export function MyBookingsPage() {
                   </div>
                 </div>
                 <BookingStatusPill status={b.status} />
+              </div>
+
+              <div className="mt-2.5 flex items-center gap-2">
+                <Avatar avatarPath={b.owner.avatar_url} firstName={b.owner.first_name} lastName={b.owner.last_name} size="sm" />
+                <div className="text-[12.5px]">
+                  <span className="text-muted">Owner</span> <strong>{b.owner.first_name} {b.owner.last_name}</strong>
+                </div>
+                {ownerRatings ? <RatingBadge {...(ownerRatings.get(b.owner_id) ?? { avg: 0, count: 0 })} /> : null}
               </div>
 
               <div className="mt-3 flex gap-5 text-[12.5px]">
