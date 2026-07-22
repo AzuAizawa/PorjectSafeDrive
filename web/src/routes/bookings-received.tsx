@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BookingStatusPill } from '@/components/ui/pill';
 import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
+import { EmergencyBanner } from '@/components/emergency-banner';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Booking, CarModel, CarBrand, Profile } from '@/lib/database.types';
 
@@ -85,6 +86,8 @@ export function BookingsReceivedPage() {
         <h1 className="text-2xl">Bookings Received</h1>
         <p className="mt-1.5 text-muted">Requests and active rentals for your vehicles.</p>
       </div>
+
+      {bookings?.some((b) => b.status === 'active') ? <EmergencyBanner /> : null}
 
       <div className="flex flex-col gap-3.5">
         {bookings?.map((b) => (

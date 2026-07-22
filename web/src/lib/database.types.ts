@@ -169,6 +169,14 @@ export interface PlatformSetting {
   updated_by: string | null;
 }
 
+export interface CompanyInfo {
+  key: string;
+  value: string;
+  description: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
 export interface AuditEntry {
   id: string;
   actor_id: string | null;

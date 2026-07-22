@@ -23,6 +23,7 @@ import { AdminDashboardPage } from '@/routes/admin/dashboard';
 import { AdminAnalyticsPage } from '@/routes/admin/analytics';
 import { InquirePage } from '@/routes/inquire';
 import { HelpPage } from '@/routes/help';
+import { AdminCompanyInfoPage } from '@/routes/admin/company-info';
 import { AdminInquiriesPage } from '@/routes/admin/inquiries';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -85,6 +86,7 @@ export default function App() {
         <Route path="admin/payments" element={<RequireFullAdmin><AdminPaymentsPage /></RequireFullAdmin>} />
         <Route path="admin/audit" element={<RequireFullAdmin><AdminAuditPage /></RequireFullAdmin>} />
         <Route path="admin/settings" element={<RequireFullAdmin><AdminSettingsPage /></RequireFullAdmin>} />
+        <Route path="admin/company-info" element={<RequireFullAdmin><AdminCompanyInfoPage /></RequireFullAdmin>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/browse" replace />} />

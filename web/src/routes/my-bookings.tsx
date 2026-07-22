@@ -7,6 +7,7 @@ import { BookingStatusPill } from '@/components/ui/pill';
 import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
 import { ReportIssueDialog } from '@/components/report-issue-dialog';
 import { RateBookingDialog } from '@/components/rate-booking-dialog';
+import { EmergencyBanner } from '@/components/emergency-banner';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { previewCancellation } from '@/lib/cancellation';
 import { signedUrl } from '@/lib/storage';
@@ -109,6 +110,8 @@ export function MyBookingsPage() {
         <h1 className="text-2xl">My Bookings</h1>
         <p className="mt-1.5 text-muted">Track your rental requests from request to completion.</p>
       </div>
+
+      {bookings?.some((b) => b.status === 'active') ? <EmergencyBanner /> : null}
 
       <div className="flex flex-col gap-3.5">
         {bookings?.map((b) => (
