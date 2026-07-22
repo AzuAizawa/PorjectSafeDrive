@@ -1,7 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import { AppShell } from '@/components/layout/AppShell';
-import { ComingSoon } from '@/components/layout/ComingSoon';
 import { LoginPage } from '@/routes/login';
 import { ResetPasswordPage } from '@/routes/reset-password';
 import { BrowsePage } from '@/routes/browse';
@@ -15,6 +14,12 @@ import { EditVehiclePage } from '@/routes/edit-vehicle';
 import { BookingsReceivedPage } from '@/routes/bookings-received';
 import { AdminUsersPage } from '@/routes/admin/users';
 import { AdminVehiclesPage } from '@/routes/admin/vehicles';
+import { AdminCatalogPage } from '@/routes/admin/catalog';
+import { AdminDisputesPage } from '@/routes/admin/disputes';
+import { AdminPaymentsPage } from '@/routes/admin/payments';
+import { AdminAuditPage } from '@/routes/admin/audit';
+import { AdminSettingsPage } from '@/routes/admin/settings';
+import { AdminDashboardPage } from '@/routes/admin/dashboard';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -54,21 +59,14 @@ export default function App() {
         <Route path="my-vehicles/:id/edit" element={<EditVehiclePage />} />
         <Route path="bookings-received" element={<BookingsReceivedPage />} />
 
-        <Route
-          path="admin"
-          element={
-            <RequireAdmin>
-              <ComingSoon eyebrow="Admin" title="Dashboard" />
-            </RequireAdmin>
-          }
-        />
+        <Route path="admin" element={<RequireAdmin><AdminDashboardPage /></RequireAdmin>} />
         <Route path="admin/users" element={<RequireAdmin><AdminUsersPage /></RequireAdmin>} />
         <Route path="admin/vehicles" element={<RequireAdmin><AdminVehiclesPage /></RequireAdmin>} />
-        <Route path="admin/catalog" element={<RequireAdmin><ComingSoon eyebrow="Admin" title="Car Catalog" /></RequireAdmin>} />
-        <Route path="admin/disputes" element={<RequireAdmin><ComingSoon eyebrow="Admin" title="Disputes" /></RequireAdmin>} />
-        <Route path="admin/payments" element={<RequireAdmin><ComingSoon eyebrow="Admin" title="Send Payments" /></RequireAdmin>} />
-        <Route path="admin/audit" element={<RequireAdmin><ComingSoon eyebrow="Admin" title="Audit Trail" /></RequireAdmin>} />
-        <Route path="admin/settings" element={<RequireAdmin><ComingSoon eyebrow="Admin" title="Platform Settings" /></RequireAdmin>} />
+        <Route path="admin/catalog" element={<RequireAdmin><AdminCatalogPage /></RequireAdmin>} />
+        <Route path="admin/disputes" element={<RequireAdmin><AdminDisputesPage /></RequireAdmin>} />
+        <Route path="admin/payments" element={<RequireAdmin><AdminPaymentsPage /></RequireAdmin>} />
+        <Route path="admin/audit" element={<RequireAdmin><AdminAuditPage /></RequireAdmin>} />
+        <Route path="admin/settings" element={<RequireAdmin><AdminSettingsPage /></RequireAdmin>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/browse" replace />} />
