@@ -9,18 +9,24 @@ import { useAuth } from '@/lib/auth-context';
 import { uploadFile, vehicleDocPath, vehicleImagePath } from '@/lib/storage';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { FileUploadBox, validateFile } from '@/components/file-upload-box';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { CarBrand, CarModel } from '@/lib/database.types';
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png'];
 
 const schema = z.object({
   brand_id: z.string().min(1, 'Required'),
   model_id: z.string().min(1, 'Required'),
-  plate_number: z.string().length(7, 'LTO plates are 7 characters'),
+  plate_number: z
+    .string()
+    .length(7, 'LTO plates are exactly 7 characters')
+    .regex(/^[A-Z0-9]+$/i, 'Letters and numbers only'),
   model_year: z.coerce.number().int().min(1980).max(new Date().getFullYear()),
-  mileage: z.coerce.number().int().nonnegative(),
-  daily_price: z.coerce.number().positive('Must be greater than 0'),
-  pickup_location: z.string().min(1, 'Required'),
-  additional_info: z.string().optional(),
-  owner_contact_number: z.string().min(7, 'Enter a valid phone number'),
+  daily_price: z.coerce.number().positive('Must be greater than 0').max(999999, 'That seems too high'),
+  pickup_location: z.string().min(1, 'Required').max(200),
+  additional_info: z.string().max(1000).optional(),
+  owner_contact_number: z.string().min(7, 'Enter a valid phone number').max(15),
   requires_deposit: z.boolean(),
   deposit_amount: z.coerce.number().nonnegative().optional(),
 });
@@ -40,6 +46,7 @@ export function AddVehiclePage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [carImages, setCarImages] = useState<File[]>([]);
+  const [carImagesError, setCarImagesError] = useState<string | null>(null);
   const [orcr, setOrcr] = useState<File | null>(null);
   const [rentalAgreement, setRentalAgreement] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,9 +61,20 @@ export function AddVehiclePage() {
   const requiresDeposit = watch('requires_deposit');
   const modelsForBrand = catalog?.models.filter((m) => m.brand_id === selectedBrandId) ?? [];
 
+  function handleCarImagesChange(files: FileList | null) {
+    const list = Array.from(files ?? []).slice(0, 4);
+    for (const f of list) {
+      const err = validateFile(f, IMAGE_TYPES);
+      if (err) { setCarImagesError(err); setCarImages([]); return; }
+    }
+    setCarImagesError(null);
+    setCarImages(list);
+  }
+
   const submit = useMutation({
     mutationFn: async (values: FormValues) => {
       if (!orcr) throw new Error('ORCR document is required');
+      if (!rentalAgreement) throw new Error('Rental agreement is required');
       if (carImages.length === 0) throw new Error('At least one car photo is required');
 
       const vehicleId = crypto.randomUUID();
@@ -65,9 +83,8 @@ export function AddVehiclePage() {
         id: vehicleId,
         owner_id: profile!.id,
         model_id: values.model_id,
-        plate_number: values.plate_number,
+        plate_number: values.plate_number.toUpperCase(),
         model_year: values.model_year,
-        mileage: values.mileage,
         daily_price: values.daily_price,
         pickup_location: values.pickup_location,
         additional_info: values.additional_info || null,
@@ -92,11 +109,8 @@ export function AddVehiclePage() {
       const orcrPath = vehicleDocPath(vehicleId, 'orcr', orcr);
       await uploadFile('vehicle-documents', orcrPath, orcr);
 
-      let rentalAgreementPath: string | null = null;
-      if (rentalAgreement) {
-        rentalAgreementPath = vehicleDocPath(vehicleId, 'rental-agreement', rentalAgreement);
-        await uploadFile('vehicle-documents', rentalAgreementPath, rentalAgreement);
-      }
+      const rentalAgreementPath = vehicleDocPath(vehicleId, 'rental-agreement', rentalAgreement);
+      await uploadFile('vehicle-documents', rentalAgreementPath, rentalAgreement);
 
       const { error: updateError } = await supabase
         .from('vehicles')
@@ -105,8 +119,18 @@ export function AddVehiclePage() {
       if (updateError) throw updateError;
     },
     onSuccess: () => navigate('/my-vehicles'),
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => setError(friendlyErrorMessage(e)),
   });
+
+  if (profile && profile.verified_status !== 'verified') {
+    return (
+      <Card className="p-6 text-center">
+        <h1 className="mb-2 text-xl font-bold">Get verified first</h1>
+        <p className="mb-4 text-muted">You need to be a verified user before you can list a vehicle.</p>
+        <Button onClick={() => navigate('/verify')}>Get Verified</Button>
+      </Card>
+    );
+  }
 
   return (
     <div>
@@ -131,28 +155,33 @@ export function AddVehiclePage() {
               </select>
             </Field>
             <Field label="Plate number" error={errors.plate_number}>
-              <input className="input-base" placeholder="e.g. NDW1284" {...register('plate_number')} />
+              <input className="input-base uppercase" placeholder="e.g. NDW1284" maxLength={7} {...register('plate_number')} />
             </Field>
             <Field label="Model year" error={errors.model_year}>
-              <input type="number" className="input-base" placeholder={String(new Date().getFullYear())} {...register('model_year')} />
+              <input
+                type="number"
+                className="input-base"
+                placeholder={String(new Date().getFullYear())}
+                min={1980}
+                max={new Date().getFullYear()}
+                maxLength={4}
+                {...register('model_year')}
+              />
               {catalog ? <p className="mt-1 text-[11px] text-muted">Must be within the last {catalog.maxVehicleAge} years.</p> : null}
             </Field>
-            <Field label="Mileage (km)" error={errors.mileage}>
-              <input type="number" className="input-base" {...register('mileage')} />
-            </Field>
             <Field label="Daily price (₱)" error={errors.daily_price}>
-              <input type="number" className="input-base" {...register('daily_price')} />
+              <input type="number" className="input-base" min={1} max={999999} {...register('daily_price')} />
             </Field>
             <Field label="Owner contact number" error={errors.owner_contact_number}>
-              <input className="input-base" {...register('owner_contact_number')} />
+              <input className="input-base" maxLength={15} placeholder="+63 9XX XXX XXXX" {...register('owner_contact_number')} />
             </Field>
           </div>
 
           <Field label="Pickup / drop-off location" error={errors.pickup_location}>
-            <input className="input-base" {...register('pickup_location')} />
+            <input className="input-base" maxLength={200} {...register('pickup_location')} />
           </Field>
           <Field label="Additional info">
-            <textarea className="input-base h-20" {...register('additional_info')} />
+            <textarea className="input-base h-20" maxLength={1000} {...register('additional_info')} />
           </Field>
 
           <div className="flex items-center gap-2">
@@ -161,28 +190,41 @@ export function AddVehiclePage() {
           </div>
           {requiresDeposit ? (
             <Field label="Deposit amount (₱)" error={errors.deposit_amount}>
-              <input type="number" className="input-base" {...register('deposit_amount')} />
+              <input type="number" className="input-base" min={0} {...register('deposit_amount')} />
             </Field>
           ) : null}
 
           <div className="grid grid-cols-3 gap-3">
             <div>
               <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted">Car photos (up to 4)</p>
-              <input
-                type="file"
-                multiple
-                accept="image/jpeg,image/png"
-                onChange={(e) => setCarImages(Array.from(e.target.files ?? []).slice(0, 4))}
-              />
+              <label className="block cursor-pointer rounded-md border-2 border-dashed border-line bg-surface-2 p-4 text-center text-xs font-semibold text-muted hover:border-accent hover:text-accent">
+                {carImages.length > 0 ? `📷 ${carImages.length} photo${carImages.length > 1 ? 's' : ''} selected` : '📤 Click to upload — JPG/PNG only'}
+                <input
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png"
+                  className="hidden"
+                  onChange={(e) => handleCarImagesChange(e.target.files)}
+                />
+              </label>
+              {carImagesError ? <p className="mt-1 text-xs text-bad">{carImagesError}</p> : null}
             </div>
-            <div>
-              <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted">ORCR (admin only)</p>
-              <input type="file" accept="image/jpeg,image/png,application/pdf" onChange={(e) => setOrcr(e.target.files?.[0] ?? null)} />
-            </div>
-            <div>
-              <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted">Rental agreement (optional)</p>
-              <input type="file" accept="application/pdf" onChange={(e) => setRentalAgreement(e.target.files?.[0] ?? null)} />
-            </div>
+            <FileUploadBox
+              label="ORCR — admin only"
+              accept="image/jpeg,image/png"
+              allowedTypes={IMAGE_TYPES}
+              hint="JPG/PNG only"
+              file={orcr}
+              onSelect={setOrcr}
+            />
+            <FileUploadBox
+              label="Rental agreement (required)"
+              accept="application/pdf"
+              allowedTypes={['application/pdf']}
+              hint="PDF only"
+              file={rentalAgreement}
+              onSelect={setRentalAgreement}
+            />
           </div>
 
           {error ? <p className="text-sm text-bad">{error}</p> : null}

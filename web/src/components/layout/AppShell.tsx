@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 const renterNav = [
   { to: '/browse', label: 'Browse Cars' },
@@ -61,6 +62,7 @@ export function AppShell() {
 
         {!isStaff ? (
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <NavLink
               to="/inquire"
               className={({ isActive }) =>
@@ -122,12 +124,15 @@ export function AppShell() {
             </div>
           </div>
         ) : (
-          <button
-            className="rounded-full border border-line bg-accent-soft px-3 py-1 text-xs font-bold text-accent-strong"
-            onClick={() => supabase.auth.signOut()}
-          >
-            Log out
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              className="rounded-full border border-line bg-accent-soft px-3 py-1 text-xs font-bold text-accent-strong"
+              onClick={() => supabase.auth.signOut()}
+            >
+              Log out
+            </button>
+          </div>
         )}
       </header>
 

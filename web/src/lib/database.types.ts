@@ -32,6 +32,11 @@ export interface Profile {
   account_status: AccountStatus;
   strike_count: number;
   account_flagged: boolean;
+  payout_method: 'bank_transfer' | 'gcash' | null;
+  bank_account_name: string | null;
+  bank_name: string | null;
+  bank_account_number: string | null;
+  gcash_number: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,11 +51,11 @@ export interface VerificationSubmission {
   address: string;
   birthday: string;
   driver_license_number: string;
-  national_id_number: string;
+  secondary_id_type: string;
   license_front_path: string;
   license_back_path: string;
-  national_id_front_path: string;
-  national_id_back_path: string;
+  secondary_id_front_path: string;
+  secondary_id_back_path: string;
   selfie_with_id_path: string;
   selfie_face_path: string;
   status: 'pending' | 'verified' | 'rejected';
@@ -82,7 +87,6 @@ export interface Vehicle {
   owner_id: string;
   model_id: string;
   plate_number: string;
-  mileage: number;
   model_year: number | null;
   daily_price: number;
   pickup_location: string;

@@ -6,16 +6,29 @@ import { formatCurrency } from '@/lib/utils';
 import type { Booking, CarBrand, CarModel, Profile } from '@/lib/database.types';
 
 type CompletedBooking = Booking & {
-  owner: Pick<Profile, 'first_name' | 'last_name'>;
+  owner: Pick<Profile, 'first_name' | 'last_name' | 'payout_method' | 'bank_account_name' | 'bank_name' | 'bank_account_number' | 'gcash_number'>;
   renter: Pick<Profile, 'first_name' | 'last_name'>;
   vehicle: { model: CarModel & { brand: CarBrand } };
 };
+
+function payoutDestination(owner: CompletedBooking['owner']) {
+  if (owner.payout_method === 'gcash') {
+    return owner.gcash_number ? `GCash ${owner.gcash_number}` : 'GCash — not set up';
+  }
+  if (owner.payout_method === 'bank_transfer') {
+    return owner.bank_name && owner.bank_account_number
+      ? `${owner.bank_name} •••${owner.bank_account_number.slice(-4)} (${owner.bank_account_name})`
+      : 'Bank transfer — not set up';
+  }
+  return 'Not set up yet';
+}
 
 async function fetchDuePayments() {
   const { data: bookings, error } = await supabase
     .from('bookings')
     .select(
-      `*, owner:profiles!bookings_owner_id_fkey(first_name, last_name), renter:profiles!bookings_renter_id_fkey(first_name, last_name),
+      `*, owner:profiles!bookings_owner_id_fkey(first_name, last_name, payout_method, bank_account_name, bank_name, bank_account_number, gcash_number),
+       renter:profiles!bookings_renter_id_fkey(first_name, last_name),
        vehicle:vehicles(model:car_models(*, brand:car_brands(*)))`
     )
     .eq('status', 'completed')
@@ -70,6 +83,7 @@ export function AdminPaymentsPage() {
           <thead>
             <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-muted-2">
               <th className="px-4 py-3">Vehicle</th><th className="px-4 py-3">Owner</th>
+              <th className="px-4 py-3">Payout to</th>
               <th className="px-4 py-3">Total price</th><th className="px-4 py-3">Commission</th>
               <th className="px-4 py-3">Net payout</th><th className="px-4 py-3" />
             </tr>
@@ -79,6 +93,7 @@ export function AdminPaymentsPage() {
               <tr key={b.id} className="border-t border-line text-[13.5px]">
                 <td className="px-4 py-3 font-bold">{b.vehicle.model.brand.name} {b.vehicle.model.name}</td>
                 <td className="px-4 py-3">{b.owner.first_name} {b.owner.last_name}</td>
+                <td className="px-4 py-3 text-xs">{payoutDestination(b.owner)}</td>
                 <td className="tabular px-4 py-3">{formatCurrency(b.total_price)}</td>
                 <td className="tabular px-4 py-3">{formatCurrency(b.commission)}</td>
                 <td className="tabular px-4 py-3"><strong>{formatCurrency(b.base_price)}</strong></td>

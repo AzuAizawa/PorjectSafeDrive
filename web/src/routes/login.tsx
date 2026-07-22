@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { PasswordInput, passwordMeetsRules } from '@/components/password-input';
 
 type Mode = 'login' | 'signup' | 'forgot';
 
@@ -46,6 +47,10 @@ export function LoginPage() {
 
     if (mode === 'signup' && password !== confirmPassword) {
       setError('Passwords do not match.');
+      return;
+    }
+    if (mode === 'signup' && !passwordMeetsRules(password)) {
+      setError('Password does not meet all the requirements below.');
       return;
     }
 
@@ -109,9 +114,25 @@ export function LoginPage() {
             </Button>
           </form>
         ) : signupSent ? (
-          <p className="text-sm text-muted">Check your email for a confirmation link before signing in.</p>
+          <div>
+            <p className="text-sm text-muted">Check your email for a confirmation link before signing in.</p>
+            <button
+              className="mt-4 text-xs font-semibold text-muted hover:text-ink"
+              onClick={() => { setSignupSent(false); setMode('login'); }}
+            >
+              ← Back to Sign In
+            </button>
+          </div>
         ) : resetSent ? (
-          <p className="text-sm text-muted">Check your email for a password reset link.</p>
+          <div>
+            <p className="text-sm text-muted">Check your email for a password reset link.</p>
+            <button
+              className="mt-4 text-xs font-semibold text-muted hover:text-ink"
+              onClick={() => { setResetSent(false); setMode('login'); }}
+            >
+              ← Back to Sign In
+            </button>
+          </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
             <div>
@@ -126,29 +147,10 @@ export function LoginPage() {
             </div>
 
             {mode !== 'forgot' ? (
-              <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">Password</label>
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  className="h-[38px] w-full rounded-md border border-line bg-surface px-3"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
+              <PasswordInput value={password} onChange={setPassword} showChecklist={mode === 'signup'} />
             ) : null}
             {mode === 'signup' ? (
-              <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">Confirm password</label>
-                <input
-                  type="password"
-                  required
-                  className="h-[38px] w-full rounded-md border border-line bg-surface px-3"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              </div>
+              <PasswordInput value={confirmPassword} onChange={setConfirmPassword} label="Confirm password" />
             ) : null}
 
             {mode === 'login' ? (

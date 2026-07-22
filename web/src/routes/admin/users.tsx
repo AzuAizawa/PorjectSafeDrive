@@ -30,8 +30,8 @@ async function fetchLatestSubmission(profileId: string) {
 const IMAGE_KEYS: (keyof VerificationSubmission)[] = [
   'license_front_path',
   'license_back_path',
-  'national_id_front_path',
-  'national_id_back_path',
+  'secondary_id_front_path',
+  'secondary_id_back_path',
   'selfie_with_id_path',
   'selfie_face_path',
 ];
@@ -171,7 +171,7 @@ export function AdminUsersPage() {
                   <div><dt className="text-xs text-muted">Phone</dt><dd className="font-semibold">{submission.phone}</dd></div>
                   <div><dt className="text-xs text-muted">Address</dt><dd className="font-semibold">{submission.address}</dd></div>
                   <div><dt className="text-xs text-muted">Driver's license #</dt><dd className="tabular font-semibold">{submission.driver_license_number}</dd></div>
-                  <div><dt className="text-xs text-muted">National ID #</dt><dd className="tabular font-semibold">{submission.national_id_number}</dd></div>
+                  <div><dt className="text-xs text-muted">Secondary ID type</dt><dd className="font-semibold capitalize">{submission.secondary_id_type.replace(/_/g, ' ')}</dd></div>
                 </dl>
                 <div className="mb-4 grid grid-cols-3 gap-2">
                   {IMAGE_KEYS.map((key) => (

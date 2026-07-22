@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { formatCurrency } from '@/lib/utils';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { PlatformSetting, VehicleListing } from '@/lib/database.types';
 
 async function fetchVehicle(id: string): Promise<VehicleListing> {
@@ -144,7 +145,6 @@ export function CarDetailPage() {
               ['Body type', vehicle.model.body_type],
               ['Seats', vehicle.model.seats],
               ['Fuel type', vehicle.model.fuel_type],
-              ['Mileage', `${vehicle.mileage.toLocaleString()} km`],
               ['Pickup / drop-off', vehicle.pickup_location],
             ].map(([label, value]) => (
               <div key={label as string} className="flex justify-between border-b border-line py-2.5 text-[13.5px] last:border-none">
@@ -241,18 +241,27 @@ export function CarDetailPage() {
             <p className="text-sm text-muted">Pick your dates to see pricing.</p>
           )}
 
-          <Button
-            block
-            className="mt-3.5"
-            disabled={!pricing || requestBooking.isPending}
-            onClick={() => requestBooking.mutate()}
-          >
-            {requestBooking.isPending ? 'Sending request…' : 'Request to Book'}
-          </Button>
-          {requestBooking.isError ? (
-            <p className="mt-2 text-center text-xs text-bad">{(requestBooking.error as Error).message}</p>
+          {profile && profile.verified_status !== 'verified' ? (
+            <>
+              <Button block className="mt-3.5" onClick={() => navigate('/verify')}>Get Verified to Book</Button>
+              <p className="mt-2 text-center text-xs text-muted">You need to be a verified user before you can book a vehicle.</p>
+            </>
           ) : (
-            <p className="mt-2 text-center text-xs text-muted">You won't be charged until the owner accepts.</p>
+            <>
+              <Button
+                block
+                className="mt-3.5"
+                disabled={!pricing || requestBooking.isPending}
+                onClick={() => requestBooking.mutate()}
+              >
+                {requestBooking.isPending ? 'Sending request…' : 'Request to Book'}
+              </Button>
+              {requestBooking.isError ? (
+                <p className="mt-2 text-center text-xs text-bad">{friendlyErrorMessage(requestBooking.error)}</p>
+              ) : (
+                <p className="mt-2 text-center text-xs text-muted">You won't be charged until the owner accepts.</p>
+              )}
+            </>
           )}
         </Card>
       </div>

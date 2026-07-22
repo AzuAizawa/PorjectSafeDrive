@@ -157,7 +157,6 @@ export function AdminVehiclesPage() {
               <div><dt className="text-xs text-muted">Owner</dt><dd className="font-semibold">{selected.owner.first_name} {selected.owner.last_name} ({selected.owner.verified_status})</dd></div>
               <div><dt className="text-xs text-muted">Plate number</dt><dd className="tabular font-semibold">{selected.plate_number}</dd></div>
               <div><dt className="text-xs text-muted">Model year</dt><dd className="tabular font-semibold">{selected.model_year ?? '—'}</dd></div>
-              <div><dt className="text-xs text-muted">Mileage</dt><dd className="tabular font-semibold">{selected.mileage.toLocaleString()} km</dd></div>
               <div><dt className="text-xs text-muted">Daily price</dt><dd className="tabular font-semibold">{formatCurrency(selected.daily_price)}</dd></div>
               <div><dt className="text-xs text-muted">Body / Seats / Fuel</dt><dd className="font-semibold">{selected.model.body_type} · {selected.model.seats} · {selected.model.fuel_type}</dd></div>
               <div><dt className="text-xs text-muted">Pickup location</dt><dd className="font-semibold">{selected.pickup_location}</dd></div>

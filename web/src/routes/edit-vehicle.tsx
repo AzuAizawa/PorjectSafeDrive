@@ -8,18 +8,24 @@ import { supabase } from '@/lib/supabase';
 import { publicUrl, uploadFile, vehicleDocPath, vehicleImagePath } from '@/lib/storage';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { FileUploadBox, validateFile } from '@/components/file-upload-box';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { CarBrand, CarModel, Vehicle, VehicleImage } from '@/lib/database.types';
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png'];
 
 const schema = z.object({
   brand_id: z.string().min(1, 'Required'),
   model_id: z.string().min(1, 'Required'),
-  plate_number: z.string().length(7, 'LTO plates are 7 characters'),
+  plate_number: z
+    .string()
+    .length(7, 'LTO plates are exactly 7 characters')
+    .regex(/^[A-Z0-9]+$/i, 'Letters and numbers only'),
   model_year: z.coerce.number().int().min(1980).max(new Date().getFullYear()),
-  mileage: z.coerce.number().int().nonnegative(),
-  daily_price: z.coerce.number().positive('Must be greater than 0'),
-  pickup_location: z.string().min(1, 'Required'),
-  additional_info: z.string().optional(),
-  owner_contact_number: z.string().min(7, 'Enter a valid phone number'),
+  daily_price: z.coerce.number().positive('Must be greater than 0').max(999999, 'That seems too high'),
+  pickup_location: z.string().min(1, 'Required').max(200),
+  additional_info: z.string().max(1000).optional(),
+  owner_contact_number: z.string().min(7, 'Enter a valid phone number').max(15),
   requires_deposit: z.boolean(),
   deposit_amount: z.coerce.number().nonnegative().optional(),
   listing_status: z.enum(['active', 'paused_by_owner']),
@@ -49,6 +55,7 @@ export function EditVehiclePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [newImages, setNewImages] = useState<File[]>([]);
+  const [newImagesError, setNewImagesError] = useState<string | null>(null);
   const [newOrcr, setNewOrcr] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +69,6 @@ export function EditVehiclePage() {
           model_id: data.vehicle.model_id,
           plate_number: data.vehicle.plate_number,
           model_year: data.vehicle.model_year ?? new Date().getFullYear(),
-          mileage: data.vehicle.mileage,
           daily_price: data.vehicle.daily_price,
           pickup_location: data.vehicle.pickup_location,
           additional_info: data.vehicle.additional_info ?? '',
@@ -92,9 +98,8 @@ export function EditVehiclePage() {
         .from('vehicles')
         .update({
           model_id: values.model_id,
-          plate_number: values.plate_number,
+          plate_number: values.plate_number.toUpperCase(),
           model_year: values.model_year,
-          mileage: values.mileage,
           daily_price: values.daily_price,
           pickup_location: values.pickup_location,
           additional_info: values.additional_info || null,
@@ -122,8 +127,19 @@ export function EditVehiclePage() {
       }
     },
     onSuccess: () => navigate('/my-vehicles'),
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => setError(friendlyErrorMessage(e)),
   });
+
+  function handleNewImagesChange(files: FileList | null) {
+    const room = Math.max(0, 4 - (data?.images.length ?? 0));
+    const list = Array.from(files ?? []).slice(0, room);
+    for (const f of list) {
+      const err = validateFile(f, IMAGE_TYPES);
+      if (err) { setNewImagesError(err); setNewImages([]); return; }
+    }
+    setNewImagesError(null);
+    setNewImages(list);
+  }
 
   if (isLoading || !data) return <p className="text-muted">Loading…</p>;
 
@@ -155,19 +171,23 @@ export function EditVehiclePage() {
               </select>
             </Field>
             <Field label="Plate number" error={errors.plate_number}>
-              <input className="input-base" {...register('plate_number')} />
+              <input className="input-base uppercase" maxLength={7} {...register('plate_number')} />
             </Field>
             <Field label="Model year" error={errors.model_year}>
-              <input type="number" className="input-base" {...register('model_year')} />
-            </Field>
-            <Field label="Mileage (km)" error={errors.mileage}>
-              <input type="number" className="input-base" {...register('mileage')} />
+              <input
+                type="number"
+                className="input-base"
+                min={1980}
+                max={new Date().getFullYear()}
+                maxLength={4}
+                {...register('model_year')}
+              />
             </Field>
             <Field label="Daily price (₱)" error={errors.daily_price}>
-              <input type="number" className="input-base" {...register('daily_price')} />
+              <input type="number" className="input-base" min={1} max={999999} {...register('daily_price')} />
             </Field>
             <Field label="Owner contact number" error={errors.owner_contact_number}>
-              <input className="input-base" {...register('owner_contact_number')} />
+              <input className="input-base" maxLength={15} {...register('owner_contact_number')} />
             </Field>
             <Field label="Listing status">
               <select className="input-base" {...register('listing_status')}>
@@ -178,10 +198,10 @@ export function EditVehiclePage() {
           </div>
 
           <Field label="Pickup / drop-off location" error={errors.pickup_location}>
-            <input className="input-base" {...register('pickup_location')} />
+            <input className="input-base" maxLength={200} {...register('pickup_location')} />
           </Field>
           <Field label="Additional info">
-            <textarea className="input-base h-20" {...register('additional_info')} />
+            <textarea className="input-base h-20" maxLength={1000} {...register('additional_info')} />
           </Field>
 
           <div className="flex items-center gap-2">
@@ -211,20 +231,30 @@ export function EditVehiclePage() {
               ))}
             </div>
             {data.images.length < 4 ? (
-              <input
-                type="file"
-                multiple
-                accept="image/jpeg,image/png"
-                className="mt-2"
-                onChange={(e) => setNewImages(Array.from(e.target.files ?? []).slice(0, 4 - data.images.length))}
-              />
+              <>
+                <label className="mt-2 block cursor-pointer rounded-md border-2 border-dashed border-line bg-surface-2 p-4 text-center text-xs font-semibold text-muted hover:border-accent hover:text-accent">
+                  {newImages.length > 0 ? `📷 ${newImages.length} photo${newImages.length > 1 ? 's' : ''} selected` : '📤 Click to upload — JPG/PNG only'}
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png"
+                    className="hidden"
+                    onChange={(e) => handleNewImagesChange(e.target.files)}
+                  />
+                </label>
+                {newImagesError ? <p className="mt-1 text-xs text-bad">{newImagesError}</p> : null}
+              </>
             ) : null}
           </div>
 
-          <div>
-            <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted">Replace ORCR (optional — admin only)</p>
-            <input type="file" accept="image/jpeg,image/png,application/pdf" onChange={(e) => setNewOrcr(e.target.files?.[0] ?? null)} />
-          </div>
+          <FileUploadBox
+            label="Replace ORCR (optional — admin only)"
+            accept="image/jpeg,image/png"
+            allowedTypes={IMAGE_TYPES}
+            hint="JPG/PNG only"
+            file={newOrcr}
+            onSelect={setNewOrcr}
+          />
 
           {error ? <p className="text-sm text-bad">{error}</p> : null}
 

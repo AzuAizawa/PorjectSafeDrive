@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { PasswordInput, passwordMeetsRules } from '@/components/password-input';
 
 export function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -17,6 +18,10 @@ export function ResetPasswordPage() {
     setError(null);
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
+      return;
+    }
+    if (!passwordMeetsRules(password)) {
+      setError('Password does not meet all the requirements below.');
       return;
     }
     setSubmitting(true);
@@ -42,27 +47,8 @@ export function ResetPasswordPage() {
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
             <p className="text-sm text-muted">Choose a new password for your account.</p>
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">New password</label>
-              <input
-                type="password"
-                required
-                minLength={8}
-                className="h-[38px] w-full rounded-md border border-line bg-surface px-3"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">Confirm new password</label>
-              <input
-                type="password"
-                required
-                className="h-[38px] w-full rounded-md border border-line bg-surface px-3"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
+            <PasswordInput value={password} onChange={setPassword} label="New password" showChecklist />
+            <PasswordInput value={confirmPassword} onChange={setConfirmPassword} label="Confirm new password" />
             {error ? <p className="text-sm text-bad">{error}</p> : null}
             <Button type="submit" block disabled={submitting}>
               {submitting ? 'Saving…' : 'Update Password'}
