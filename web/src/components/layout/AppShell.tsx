@@ -21,6 +21,7 @@ const adminNav = [
   { to: '/admin/vehicles', label: 'Vehicle Approval' },
   { to: '/admin/catalog', label: 'Car Catalog' },
   { to: '/admin/disputes', label: 'Disputes' },
+  { to: '/admin/inquiries', label: 'Inquiries' },
   { to: '/admin/payments', label: 'Send Payments' },
   { to: '/admin/audit', label: 'Audit Trail' },
   { to: '/admin/settings', label: 'Settings' },
@@ -50,7 +51,21 @@ export function AppShell() {
         </div>
 
         {!isAdmin ? (
-          <div className="relative">
+          <div className="flex items-center gap-2">
+            <NavLink
+              to="/inquire"
+              className={({ isActive }) =>
+                cn(
+                  'grid h-8.5 w-8.5 place-items-center rounded-full border border-line bg-surface text-base',
+                  isActive && 'border-accent bg-accent-soft'
+                )
+              }
+              title="Inquire — ask support a question"
+              aria-label="Inquire — ask support a question"
+            >
+              💬
+            </NavLink>
+            <div className="relative">
             <button
               className="grid h-8.5 w-8.5 place-items-center rounded-full border border-line bg-accent-soft text-xs font-bold text-accent-strong"
               onClick={() => setMenuOpen((o) => !o)}
@@ -88,6 +103,7 @@ export function AppShell() {
                 </button>
               </div>
             ) : null}
+            </div>
           </div>
         ) : (
           <button

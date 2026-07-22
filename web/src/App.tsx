@@ -20,6 +20,8 @@ import { AdminPaymentsPage } from '@/routes/admin/payments';
 import { AdminAuditPage } from '@/routes/admin/audit';
 import { AdminSettingsPage } from '@/routes/admin/settings';
 import { AdminDashboardPage } from '@/routes/admin/dashboard';
+import { InquirePage } from '@/routes/inquire';
+import { AdminInquiriesPage } from '@/routes/admin/inquiries';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -53,6 +55,7 @@ export default function App() {
         <Route path="bookings" element={<MyBookingsPage />} />
         <Route path="verify" element={<VerifyPage />} />
         <Route path="profile" element={<ProfilePage />} />
+        <Route path="inquire" element={<InquirePage />} />
 
         <Route path="my-vehicles" element={<MyVehiclesPage />} />
         <Route path="my-vehicles/new" element={<AddVehiclePage />} />
@@ -64,6 +67,7 @@ export default function App() {
         <Route path="admin/vehicles" element={<RequireAdmin><AdminVehiclesPage /></RequireAdmin>} />
         <Route path="admin/catalog" element={<RequireAdmin><AdminCatalogPage /></RequireAdmin>} />
         <Route path="admin/disputes" element={<RequireAdmin><AdminDisputesPage /></RequireAdmin>} />
+        <Route path="admin/inquiries" element={<RequireAdmin><AdminInquiriesPage /></RequireAdmin>} />
         <Route path="admin/payments" element={<RequireAdmin><AdminPaymentsPage /></RequireAdmin>} />
         <Route path="admin/audit" element={<RequireAdmin><AdminAuditPage /></RequireAdmin>} />
         <Route path="admin/settings" element={<RequireAdmin><AdminSettingsPage /></RequireAdmin>} />
