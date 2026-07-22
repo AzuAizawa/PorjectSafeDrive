@@ -14,6 +14,7 @@ const schema = z.object({
   brand_id: z.string().min(1, 'Required'),
   model_id: z.string().min(1, 'Required'),
   plate_number: z.string().length(7, 'LTO plates are 7 characters'),
+  model_year: z.coerce.number().int().min(1980).max(new Date().getFullYear()),
   mileage: z.coerce.number().int().nonnegative(),
   daily_price: z.coerce.number().positive('Must be greater than 0'),
   pickup_location: z.string().min(1, 'Required'),
@@ -41,7 +42,7 @@ async function fetchVehicle(id: string) {
   return { vehicle: vehicle as VehicleRow, images: (images ?? []) as VehicleImage[], brands: brands as CarBrand[], models: models as CarModel[] };
 }
 
-const SENSITIVE_FIELDS = ['plate_number', 'model_id'] as const;
+const SENSITIVE_FIELDS = ['plate_number', 'model_id', 'model_year'] as const;
 
 export function EditVehiclePage() {
   const { id } = useParams<{ id: string }>();
@@ -60,6 +61,7 @@ export function EditVehiclePage() {
           brand_id: data.vehicle.model.brand_id,
           model_id: data.vehicle.model_id,
           plate_number: data.vehicle.plate_number,
+          model_year: data.vehicle.model_year ?? new Date().getFullYear(),
           mileage: data.vehicle.mileage,
           daily_price: data.vehicle.daily_price,
           pickup_location: data.vehicle.pickup_location,
@@ -91,6 +93,7 @@ export function EditVehiclePage() {
         .update({
           model_id: values.model_id,
           plate_number: values.plate_number,
+          model_year: values.model_year,
           mileage: values.mileage,
           daily_price: values.daily_price,
           pickup_location: values.pickup_location,
@@ -153,6 +156,9 @@ export function EditVehiclePage() {
             </Field>
             <Field label="Plate number" error={errors.plate_number}>
               <input className="input-base" {...register('plate_number')} />
+            </Field>
+            <Field label="Model year" error={errors.model_year}>
+              <input type="number" className="input-base" {...register('model_year')} />
             </Field>
             <Field label="Mileage (km)" error={errors.mileage}>
               <input type="number" className="input-base" {...register('mileage')} />

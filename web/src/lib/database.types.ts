@@ -26,7 +26,7 @@ export interface Profile {
   phone: string | null;
   address: string | null;
   birthday: string | null;
-  role: 'user' | 'admin';
+  role: 'user' | 'support' | 'admin';
   is_lister: boolean;
   verified_status: VerifiedStatus;
   account_status: AccountStatus;
@@ -55,6 +55,7 @@ export interface VerificationSubmission {
   selfie_face_path: string;
   status: 'pending' | 'verified' | 'rejected';
   rejection_reason: string | null;
+  ban_evasion_flag: boolean;
   submitted_at: string;
   reviewed_at: string | null;
   reviewed_by: string | null;
@@ -82,11 +83,12 @@ export interface Vehicle {
   model_id: string;
   plate_number: string;
   mileage: number;
+  model_year: number | null;
   daily_price: number;
   pickup_location: string;
   additional_info: string | null;
   owner_contact_number: string;
-  orcr_path: string;
+  orcr_path: string | null;
   rental_agreement_path: string | null;
   requires_deposit: boolean;
   deposit_amount: number | null;

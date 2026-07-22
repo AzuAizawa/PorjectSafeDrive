@@ -15,25 +15,32 @@ const listerNav = [
   { to: '/bookings-received', label: 'Bookings Received' },
 ];
 
+// fullAdminOnly items are hidden entirely for the support role, matching the
+// backend: support can't touch settings, payouts/refunds, catalog, or audit.
 const adminNav = [
-  { to: '/admin', label: 'Dashboard' },
-  { to: '/admin/analytics', label: 'Analytics' },
-  { to: '/admin/users', label: 'Users' },
-  { to: '/admin/vehicles', label: 'Vehicle Approval' },
-  { to: '/admin/catalog', label: 'Car Catalog' },
-  { to: '/admin/disputes', label: 'Disputes' },
-  { to: '/admin/inquiries', label: 'Inquiries' },
-  { to: '/admin/payments', label: 'Send Payments' },
-  { to: '/admin/audit', label: 'Audit Trail' },
-  { to: '/admin/settings', label: 'Settings' },
+  { to: '/admin', label: 'Dashboard', fullAdminOnly: false },
+  { to: '/admin/analytics', label: 'Analytics', fullAdminOnly: false },
+  { to: '/admin/users', label: 'Users', fullAdminOnly: false },
+  { to: '/admin/vehicles', label: 'Vehicle Approval', fullAdminOnly: false },
+  { to: '/admin/disputes', label: 'Disputes', fullAdminOnly: false },
+  { to: '/admin/inquiries', label: 'Inquiries', fullAdminOnly: false },
+  { to: '/admin/catalog', label: 'Car Catalog', fullAdminOnly: true },
+  { to: '/admin/payments', label: 'Send Payments', fullAdminOnly: true },
+  { to: '/admin/audit', label: 'Audit Trail', fullAdminOnly: true },
+  { to: '/admin/settings', label: 'Settings', fullAdminOnly: true },
 ];
 
 export function AppShell() {
   const { profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-  const isAdmin = profile?.role === 'admin';
-  const nav = isAdmin ? adminNav : profile?.is_lister ? listerNav : renterNav;
+  const isStaff = profile?.role === 'admin' || profile?.role === 'support';
+  const isFullAdmin = profile?.role === 'admin';
+  const nav = isStaff
+    ? adminNav.filter((item) => !item.fullAdminOnly || isFullAdmin)
+    : profile?.is_lister
+      ? listerNav
+      : renterNav;
 
   async function toggleLister() {
     if (!profile) return;
@@ -51,7 +58,7 @@ export function AppShell() {
           SafeDrive
         </div>
 
-        {!isAdmin ? (
+        {!isStaff ? (
           <div className="flex items-center gap-2">
             <NavLink
               to="/inquire"

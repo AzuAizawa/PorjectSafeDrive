@@ -31,7 +31,17 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function RequireAdmin({ children }: { children: React.ReactNode }) {
+// Staff = admin or support — the lower-risk admin pages (dashboard, analytics,
+// users, vehicle approval, disputes, inquiries).
+function RequireStaff({ children }: { children: React.ReactNode }) {
+  const { profile } = useAuth();
+  if (profile && !['admin', 'support'].includes(profile.role)) return <Navigate to="/browse" replace />;
+  return <>{children}</>;
+}
+
+// Full admin only — settings, payouts/refunds, catalog, audit trail. Support
+// can't touch any of these, per the trust & safety brainstorm decision.
+function RequireFullAdmin({ children }: { children: React.ReactNode }) {
   const { profile } = useAuth();
   if (profile && profile.role !== 'admin') return <Navigate to="/browse" replace />;
   return <>{children}</>;
@@ -63,16 +73,16 @@ export default function App() {
         <Route path="my-vehicles/:id/edit" element={<EditVehiclePage />} />
         <Route path="bookings-received" element={<BookingsReceivedPage />} />
 
-        <Route path="admin" element={<RequireAdmin><AdminDashboardPage /></RequireAdmin>} />
-        <Route path="admin/analytics" element={<RequireAdmin><AdminAnalyticsPage /></RequireAdmin>} />
-        <Route path="admin/users" element={<RequireAdmin><AdminUsersPage /></RequireAdmin>} />
-        <Route path="admin/vehicles" element={<RequireAdmin><AdminVehiclesPage /></RequireAdmin>} />
-        <Route path="admin/catalog" element={<RequireAdmin><AdminCatalogPage /></RequireAdmin>} />
-        <Route path="admin/disputes" element={<RequireAdmin><AdminDisputesPage /></RequireAdmin>} />
-        <Route path="admin/inquiries" element={<RequireAdmin><AdminInquiriesPage /></RequireAdmin>} />
-        <Route path="admin/payments" element={<RequireAdmin><AdminPaymentsPage /></RequireAdmin>} />
-        <Route path="admin/audit" element={<RequireAdmin><AdminAuditPage /></RequireAdmin>} />
-        <Route path="admin/settings" element={<RequireAdmin><AdminSettingsPage /></RequireAdmin>} />
+        <Route path="admin" element={<RequireStaff><AdminDashboardPage /></RequireStaff>} />
+        <Route path="admin/analytics" element={<RequireStaff><AdminAnalyticsPage /></RequireStaff>} />
+        <Route path="admin/users" element={<RequireStaff><AdminUsersPage /></RequireStaff>} />
+        <Route path="admin/vehicles" element={<RequireStaff><AdminVehiclesPage /></RequireStaff>} />
+        <Route path="admin/disputes" element={<RequireStaff><AdminDisputesPage /></RequireStaff>} />
+        <Route path="admin/inquiries" element={<RequireStaff><AdminInquiriesPage /></RequireStaff>} />
+        <Route path="admin/catalog" element={<RequireFullAdmin><AdminCatalogPage /></RequireFullAdmin>} />
+        <Route path="admin/payments" element={<RequireFullAdmin><AdminPaymentsPage /></RequireFullAdmin>} />
+        <Route path="admin/audit" element={<RequireFullAdmin><AdminAuditPage /></RequireFullAdmin>} />
+        <Route path="admin/settings" element={<RequireFullAdmin><AdminSettingsPage /></RequireFullAdmin>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/browse" replace />} />

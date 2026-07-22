@@ -15,6 +15,7 @@ const schema = z.object({
   brand_id: z.string().min(1, 'Required'),
   model_id: z.string().min(1, 'Required'),
   plate_number: z.string().length(7, 'LTO plates are 7 characters'),
+  model_year: z.coerce.number().int().min(1980).max(new Date().getFullYear()),
   mileage: z.coerce.number().int().nonnegative(),
   daily_price: z.coerce.number().positive('Must be greater than 0'),
   pickup_location: z.string().min(1, 'Required'),
@@ -31,7 +32,8 @@ async function fetchCatalog() {
   if (e1) throw e1;
   const { data: models, error: e2 } = await supabase.from('car_models').select('*').order('name');
   if (e2) throw e2;
-  return { brands: brands as CarBrand[], models: models as CarModel[] };
+  const { data: setting } = await supabase.from('platform_settings').select('value').eq('key', 'max_vehicle_age_years').single();
+  return { brands: brands as CarBrand[], models: models as CarModel[], maxVehicleAge: Number(setting?.value ?? 15) };
 }
 
 export function AddVehiclePage() {
@@ -64,6 +66,7 @@ export function AddVehiclePage() {
         owner_id: profile!.id,
         model_id: values.model_id,
         plate_number: values.plate_number,
+        model_year: values.model_year,
         mileage: values.mileage,
         daily_price: values.daily_price,
         pickup_location: values.pickup_location,
@@ -129,6 +132,10 @@ export function AddVehiclePage() {
             </Field>
             <Field label="Plate number" error={errors.plate_number}>
               <input className="input-base" placeholder="e.g. NDW1284" {...register('plate_number')} />
+            </Field>
+            <Field label="Model year" error={errors.model_year}>
+              <input type="number" className="input-base" placeholder={String(new Date().getFullYear())} {...register('model_year')} />
+              {catalog ? <p className="mt-1 text-[11px] text-muted">Must be within the last {catalog.maxVehicleAge} years.</p> : null}
             </Field>
             <Field label="Mileage (km)" error={errors.mileage}>
               <input type="number" className="input-base" {...register('mileage')} />

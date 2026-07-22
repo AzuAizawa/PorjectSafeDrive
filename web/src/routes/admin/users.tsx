@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth-context';
 import { signedUrl } from '@/lib/storage';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,8 @@ function accountPill(status: Profile['account_status']) {
 }
 
 export function AdminUsersPage() {
+  const { profile: viewer } = useAuth();
+  const isFullAdmin = viewer?.role === 'admin';
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Profile | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
@@ -156,6 +159,12 @@ export function AdminUsersPage() {
 
             {selected.verified_status === 'pending' && submission ? (
               <>
+                {submission.ban_evasion_flag ? (
+                  <div className="mb-3 rounded-md border border-bad bg-bad-soft p-3 text-xs text-bad">
+                    ⚠ This submission's driver's license or national ID number matches a previously <strong>banned</strong> account.
+                    Review carefully before approving — it may be the same person re-registering under a new email.
+                  </div>
+                ) : null}
                 <dl className="mb-4 grid grid-cols-2 gap-3 text-[13px]">
                   <div><dt className="text-xs text-muted">Full name</dt><dd className="font-semibold">{submission.first_name} {submission.middle_name} {submission.last_name}</dd></div>
                   <div><dt className="text-xs text-muted">Birthday</dt><dd className="font-semibold">{formatDate(submission.birthday)}</dd></div>
@@ -200,26 +209,30 @@ export function AdminUsersPage() {
               <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Account Standing</h4>
               <div className="mb-3 flex items-center justify-between text-sm">
                 <span>Strikes: {selected.strike_count}{selected.account_flagged ? ' — flagged for review' : ''}</span>
-                {selected.strike_count > 0 ? (
+                {isFullAdmin && selected.strike_count > 0 ? (
                   <Button size="sm" variant="secondary" disabled={clearStrikes.isPending} onClick={() => clearStrikes.mutate()}>
                     Clear Strikes
                   </Button>
                 ) : null}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {selected.account_status !== 'active' ? (
-                  <Button size="sm" disabled={setStatus.isPending} onClick={() => setStatus.mutate('active')}>Reactivate</Button>
-                ) : (
-                  <>
-                    <Button size="sm" variant="secondary" disabled={setStatus.isPending} onClick={() => setStatus.mutate('suspended')}>
-                      Suspend
-                    </Button>
-                    <Button size="sm" variant="danger" disabled={setStatus.isPending} onClick={() => setStatus.mutate('banned')}>
-                      Ban
-                    </Button>
-                  </>
-                )}
-              </div>
+              {isFullAdmin ? (
+                <div className="flex flex-wrap gap-2">
+                  {selected.account_status !== 'active' ? (
+                    <Button size="sm" disabled={setStatus.isPending} onClick={() => setStatus.mutate('active')}>Reactivate</Button>
+                  ) : (
+                    <>
+                      <Button size="sm" variant="secondary" disabled={setStatus.isPending} onClick={() => setStatus.mutate('suspended')}>
+                        Suspend
+                      </Button>
+                      <Button size="sm" variant="danger" disabled={setStatus.isPending} onClick={() => setStatus.mutate('banned')}>
+                        Ban
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-muted">Suspend/ban actions require full admin access.</p>
+              )}
             </div>
           </Card>
         ) : null}
