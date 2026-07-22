@@ -221,6 +221,17 @@ export interface Dispute {
   resolved_at: string | null;
 }
 
+export interface ListingReport {
+  id: string;
+  vehicle_id: string;
+  reporter_id: string;
+  reason: string;
+  status: 'open' | 'resolved';
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+}
+
 // Convenience joined shape used by Browse/Car Detail — vehicle + model + brand + owner + cover image.
 export interface VehicleListing extends Vehicle {
   model: CarModel & { brand: CarBrand };

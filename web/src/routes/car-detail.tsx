@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { publicUrl, signedUrl } from '@/lib/storage';
+import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { formatCurrency } from '@/lib/utils';
 import type { PlatformSetting, VehicleListing } from '@/lib/database.types';
 
@@ -30,10 +32,12 @@ async function fetchSettings(): Promise<Record<string, number>> {
 
 export function CarDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { profile } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
 
   const { data: vehicle } = useQuery({ queryKey: ['vehicle', id], queryFn: () => fetchVehicle(id!), enabled: !!id });
   const { data: settings } = useQuery({ queryKey: ['platform_settings'], queryFn: fetchSettings });
@@ -53,6 +57,16 @@ export function CarDetailPage() {
     const downpayment = total * (settings.downpayment_percent / 100);
     return { days, base, commission, total, downpayment, balance: total - downpayment };
   }, [vehicle, settings, startDate, endDate]);
+
+  const reportListing = useMutation({
+    mutationFn: async (reason: string) => {
+      const { error } = await supabase
+        .from('listing_reports')
+        .insert({ vehicle_id: id, reporter_id: profile!.id, reason });
+      if (error) throw error;
+    },
+    onSuccess: () => setReportOpen(false),
+  });
 
   const requestBooking = useMutation({
     mutationFn: async () => {
@@ -86,13 +100,18 @@ export function CarDetailPage() {
             ) : null}
           </div>
 
-          <div className="mt-5">
-            <h1 className="text-2xl">
-              {vehicle.model.brand.name} {vehicle.model.name}
-            </h1>
-            <p className="mt-1.5 text-muted">
-              Listed by <strong>{vehicle.owner.first_name} {vehicle.owner.last_name}</strong>
-            </p>
+          <div className="mt-5 flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl">
+                {vehicle.model.brand.name} {vehicle.model.name}
+              </h1>
+              <p className="mt-1.5 text-muted">
+                Listed by <strong>{vehicle.owner.first_name} {vehicle.owner.last_name}</strong>
+              </p>
+            </div>
+            <button className="text-xs font-semibold text-muted underline hover:text-bad" onClick={() => setReportOpen(true)}>
+              Report this listing
+            </button>
           </div>
 
           <Card className="mt-4.5 p-5">
@@ -196,6 +215,19 @@ export function CarDetailPage() {
           )}
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={reportOpen}
+        title="Report this listing"
+        description="Tell us what looks wrong — fake photos, misleading info, etc. Admin will re-review the listing."
+        requireReason
+        reasonPlaceholder="What's the issue?"
+        confirmLabel="Submit Report"
+        confirmVariant="danger"
+        pending={reportListing.isPending}
+        onConfirm={(reason) => reason && reportListing.mutate(reason)}
+        onCancel={() => setReportOpen(false)}
+      />
     </div>
   );
 }

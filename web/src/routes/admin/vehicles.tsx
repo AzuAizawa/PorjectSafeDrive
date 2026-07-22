@@ -6,9 +6,13 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
 import { formatCurrency } from '@/lib/utils';
-import type { CarBrand, CarModel, Profile, Vehicle } from '@/lib/database.types';
+import type { CarBrand, CarModel, ListingReport, Profile, Vehicle } from '@/lib/database.types';
 
 type VehicleRow = Vehicle & { model: CarModel & { brand: CarBrand }; owner: Pick<Profile, 'first_name' | 'last_name' | 'verified_status'> };
+type ReportRow = ListingReport & {
+  vehicle: { model: CarModel & { brand: CarBrand } };
+  reporter: Pick<Profile, 'first_name' | 'last_name'>;
+};
 
 async function fetchVehicles() {
   const { data, error } = await supabase
@@ -17,6 +21,16 @@ async function fetchVehicles() {
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data as unknown as VehicleRow[];
+}
+
+async function fetchOpenReports() {
+  const { data, error } = await supabase
+    .from('listing_reports')
+    .select('*, vehicle:vehicles(model:car_models(*, brand:car_brands(*))), reporter:profiles(first_name, last_name)')
+    .eq('status', 'open')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data as unknown as ReportRow[];
 }
 
 function statusPill(v: Vehicle) {
@@ -32,6 +46,7 @@ export function AdminVehiclesPage() {
   const [rejectReason, setRejectReason] = useState('');
 
   const { data: vehicles } = useQuery({ queryKey: ['admin-vehicles'], queryFn: fetchVehicles });
+  const { data: reports } = useQuery({ queryKey: ['admin-listing-reports'], queryFn: fetchOpenReports });
 
   async function openReview(v: VehicleRow) {
     setSelected(v);
@@ -58,6 +73,13 @@ export function AdminVehiclesPage() {
     },
     onSuccess: invalidate,
   });
+  const dismissReport = useMutation({
+    mutationFn: async (reportId: string) => {
+      const { error } = await supabase.rpc('resolve_listing_report', { p_report_id: reportId });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-listing-reports'] }),
+  });
 
   return (
     <div>
@@ -66,6 +88,37 @@ export function AdminVehiclesPage() {
         <h1 className="text-2xl">Vehicle Approval</h1>
         <p className="mt-1.5 text-muted">Cross-check the ORCR against the owner's verified identity before approving.</p>
       </div>
+
+      {reports && reports.length > 0 ? (
+        <Card className="mb-5 p-5">
+          <h3 className="mb-3 text-sm font-bold">Reported Listings ({reports.length})</h3>
+          <div className="flex flex-col gap-2.5">
+            {reports.map((r) => (
+              <div key={r.id} className="flex items-center justify-between rounded-md border border-warn bg-warn-soft p-3 text-sm">
+                <div>
+                  <strong>{r.vehicle.model.brand.name} {r.vehicle.model.name}</strong> — {r.reason}
+                  <div className="text-xs text-muted">Reported by {r.reporter.first_name} {r.reporter.last_name}</div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      const v = vehicles?.find((veh) => veh.id === r.vehicle_id);
+                      if (v) openReview(v);
+                    }}
+                  >
+                    Review Vehicle
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={dismissReport.isPending} onClick={() => dismissReport.mutate(r.id)}>
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-[1.4fr_1fr] gap-5 items-start">
         <div className="rounded-2xl border border-line bg-surface">
