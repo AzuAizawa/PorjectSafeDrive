@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { LineChart } from '@/components/charts/line-chart';
 import { SuggestionCard } from '@/components/charts/suggestion-card';
+import { HeatmapChart, type HeatmapCell } from '@/components/charts/heatmap-chart';
 import { formatCurrency } from '@/lib/utils';
 import type { Booking, CarBrand, CarModel, Vehicle } from '@/lib/database.types';
 
@@ -35,6 +36,18 @@ async function fetchListerAnalytics(ownerId: string) {
   const overallRating = reviews && reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : null;
 
   const revenueByWeek = new Map<string, number>();
+  const peakTimeCounts = new Map<string, number>();
+  for (const b of bookings as Booking[]) {
+    const day = new Date(`${b.start_date}T12:00:00`).getDay();
+    const hour = Number(String(b.pickup_time).slice(0, 2));
+    const peakKey = `${day}-${hour}`;
+    peakTimeCounts.set(peakKey, (peakTimeCounts.get(peakKey) ?? 0) + 1);
+  }
+  const peakTimes: HeatmapCell[] = [...peakTimeCounts.entries()].map(([key, value]) => {
+    const [day, hour] = key.split('-').map(Number);
+    return { day, hour, value };
+  });
+
   const perVehicle = (vehicles as VehicleRow[]).map((v) => {
     const vBookings = (bookings as Booking[]).filter((b) => b.vehicle_id === v.id);
     const completed = vBookings.filter((b) => b.status === 'completed');
@@ -76,7 +89,7 @@ async function fetchListerAnalytics(ownerId: string) {
   const sortedWeeks = [...revenueByWeek.keys()].sort();
   const revenueTrend = sortedWeeks.map((k) => ({ label: weekLabel(k), value: revenueByWeek.get(k)! }));
 
-  return { perVehicle, revenueTrend, overallRating };
+  return { perVehicle, revenueTrend, overallRating, peakTimes };
 }
 
 export function ListerAnalyticsTab({ ownerId }: { ownerId: string }) {
@@ -102,6 +115,12 @@ export function ListerAnalyticsTab({ ownerId }: { ownerId: string }) {
         ) : (
           <p className="text-sm text-muted">No completed bookings yet.</p>
         )}
+      </Card>
+
+      <Card className="mb-5 p-5">
+        <h3 className="mb-1 text-sm font-bold">Peak pickup times</h3>
+        <p className="mb-3 text-xs text-muted">When renters schedule pickup for your vehicles, by day of week and hour.</p>
+        <HeatmapChart cells={data.peakTimes} />
       </Card>
 
       <div className="grid grid-cols-2 gap-4">

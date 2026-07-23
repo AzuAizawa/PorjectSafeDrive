@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { LineChart } from '@/components/charts/line-chart';
 import { BarChart } from '@/components/charts/bar-chart';
 import { FunnelChart } from '@/components/charts/funnel-chart';
+import { HeatmapChart, type HeatmapCell } from '@/components/charts/heatmap-chart';
 import { SuggestionCard } from '@/components/charts/suggestion-card';
 import { formatCurrency } from '@/lib/utils';
 
@@ -29,7 +30,7 @@ async function fetchAnalytics() {
     await Promise.all([
       supabase
         .from('bookings')
-        .select('created_at, commission, vehicle:vehicles(pickup_location, model:car_models(name, brand:car_brands(name)))')
+        .select('created_at, commission, start_date, pickup_time, vehicle:vehicles(pickup_location, model:car_models(name, brand:car_brands(name)))')
         .gte('created_at', twelveWeeksAgo)
         .order('created_at'),
       supabase.from('bookings').select('*', { count: 'exact', head: true }),
@@ -43,6 +44,7 @@ async function fetchAnalytics() {
   const trend = new Map<string, { count: number; revenue: number }>();
   const modelCounts = new Map<string, number>();
   const locationCounts = new Map<string, number>();
+  const peakTimeCounts = new Map<string, number>();
 
   for (const b of (bookings ?? []) as any[]) {
     const key = weekKey(b.created_at);
@@ -59,7 +61,17 @@ async function fetchAnalytics() {
     if (vehicle?.pickup_location) {
       locationCounts.set(vehicle.pickup_location, (locationCounts.get(vehicle.pickup_location) ?? 0) + 1);
     }
+    if (b.start_date && b.pickup_time) {
+      const day = new Date(`${b.start_date}T12:00:00`).getDay();
+      const hour = Number(String(b.pickup_time).slice(0, 2));
+      const peakKey = `${day}-${hour}`;
+      peakTimeCounts.set(peakKey, (peakTimeCounts.get(peakKey) ?? 0) + 1);
+    }
   }
+  const peakTimes: HeatmapCell[] = [...peakTimeCounts.entries()].map(([key, value]) => {
+    const [day, hour] = key.split('-').map(Number);
+    return { day, hour, value };
+  });
 
   const sortedWeeks = [...trend.keys()].sort();
   const bookingsTrend = sortedWeeks.map((k) => ({ label: weekStartLabel(k), value: trend.get(k)!.count }));
@@ -75,6 +87,7 @@ async function fetchAnalytics() {
     revenueTrend,
     topModels,
     topLocations,
+    peakTimes,
     funnel: [
       { label: 'Requested', value: totalBookings ?? 0 },
       { label: 'Accepted', value: accepted ?? 0 },
@@ -153,6 +166,12 @@ export function AdminAnalyticsPage() {
         <Card className="col-span-2 p-5">
           <h3 className="mb-3 text-sm font-bold">Booking funnel</h3>
           <FunnelChart stages={data.funnel} />
+        </Card>
+
+        <Card className="col-span-2 p-5">
+          <h3 className="mb-1 text-sm font-bold">Peak pickup times</h3>
+          <p className="mb-3 text-xs text-muted">When renters schedule pickup, by day of week and hour — last 12 weeks.</p>
+          <HeatmapChart cells={data.peakTimes} />
         </Card>
       </div>
     </div>
