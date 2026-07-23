@@ -91,6 +91,7 @@ export interface Vehicle {
   plate_number: string;
   model_year: number | null;
   transmission: Transmission;
+  city: string;
   daily_price: number;
   pickup_location: string;
   additional_info: string | null;

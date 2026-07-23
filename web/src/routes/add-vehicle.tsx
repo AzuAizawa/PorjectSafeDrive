@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileUploadBox, validateFile } from '@/components/file-upload-box';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
+import { CITY_OPTIONS } from '@/lib/cities';
 import type { CarBrand, CarModel } from '@/lib/database.types';
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png'];
@@ -24,6 +25,7 @@ const schema = z.object({
     .regex(/^[A-Z0-9]+$/i, 'Letters and numbers only'),
   model_year: z.coerce.number().int().min(1980).max(new Date().getFullYear()),
   transmission: z.enum(['manual', 'automatic']),
+  city: z.string().min(1, 'Required'),
   daily_price: z.coerce.number().positive('Must be greater than 0').max(999999, 'That seems too high'),
   pickup_location: z.string().min(1, 'Required').max(200),
   additional_info: z.string().max(1000).optional(),
@@ -72,7 +74,7 @@ export function AddVehiclePage() {
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
-    defaultValues: { requires_deposit: false, transmission: 'automatic' },
+    defaultValues: { requires_deposit: false, transmission: 'automatic', city: 'manila' },
   });
   const selectedBrandId = watch('brand_id');
   const requiresDeposit = watch('requires_deposit');
@@ -103,6 +105,7 @@ export function AddVehiclePage() {
         plate_number: values.plate_number.toUpperCase(),
         model_year: values.model_year,
         transmission: values.transmission,
+        city: values.city,
         daily_price: values.daily_price,
         pickup_location: values.pickup_location,
         additional_info: values.additional_info || null,
@@ -209,9 +212,16 @@ export function AddVehiclePage() {
             </Field>
           </div>
 
-          <Field label="Pickup / drop-off location" error={errors.pickup_location}>
-            <input className="input-base" maxLength={200} {...register('pickup_location')} />
-          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="City" error={errors.city}>
+              <select className="input-base" {...register('city')}>
+                {CITY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Pickup / drop-off location" error={errors.pickup_location}>
+              <input className="input-base" maxLength={200} placeholder="Street, barangay, landmark" {...register('pickup_location')} />
+            </Field>
+          </div>
           <Field label="Additional info">
             <textarea className="input-base h-20" maxLength={1000} {...register('additional_info')} />
           </Field>

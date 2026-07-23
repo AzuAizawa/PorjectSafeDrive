@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { publicUrl, signedUrl } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AvailabilityCalendar } from '@/components/availability-calendar';
 import { formatCurrency } from '@/lib/utils';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
+import { cityLabel } from '@/lib/cities';
 import type { PlatformSetting, VehicleListing } from '@/lib/database.types';
 
 async function fetchVehicle(id: string): Promise<VehicleListing & { image_urls: string[] }> {
@@ -56,8 +57,15 @@ export function CarDetailPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [searchParams] = useSearchParams();
+  // Dates picked on Browse's availability filter carry over here so the
+  // renter doesn't have to re-pick the same range on this calendar — but
+  // only if they're not stale (e.g. an old bookmarked/shared link).
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const carriedStart = searchParams.get('start');
+  const carriedEnd = searchParams.get('end');
+  const [startDate, setStartDate] = useState(carriedStart && carriedStart >= todayIso ? carriedStart : '');
+  const [endDate, setEndDate] = useState(carriedStart && carriedStart >= todayIso ? (carriedEnd ?? '') : '');
   const [pickupTime, setPickupTime] = useState('10:00');
   const [reportOpen, setReportOpen] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
@@ -178,6 +186,7 @@ export function CarDetailPage() {
               ['Fuel type', vehicle.model.fuel_type],
               ['Transmission', vehicle.transmission === 'automatic' ? 'Automatic' : 'Manual'],
               ...(vehicle.model_year ? [['Model year', vehicle.model_year]] : []),
+              ['City', cityLabel(vehicle.city)],
               ['Pickup / drop-off', vehicle.pickup_location],
               ...(vehicle.requires_deposit
                 ? [['Refundable security deposit', formatCurrency(vehicle.deposit_amount ?? 0)]]
