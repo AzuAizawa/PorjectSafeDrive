@@ -131,6 +131,13 @@ export function AdminUsersPage() {
     },
     onSuccess: invalidate,
   });
+  const changeRole = useMutation({
+    mutationFn: async (role: 'user' | 'support' | 'admin') => {
+      const { error } = await supabase.rpc('promote_user_role', { p_profile_id: selected!.id, p_new_role: role });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
 
   return (
     <div>
@@ -276,6 +283,30 @@ export function AdminUsersPage() {
               {setStatus.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(setStatus.error)}</p> : null}
               {clearStrikes.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(clearStrikes.error)}</p> : null}
             </div>
+
+            {isFullAdmin ? (
+              <div className="border-t border-line pt-4">
+                <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Staff Role</h4>
+                {selected.id === viewer?.id ? (
+                  <p className="text-xs text-muted">You can't change your own role here.</p>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="input-base w-auto"
+                      value={selected.role}
+                      disabled={changeRole.isPending}
+                      onChange={(e) => changeRole.mutate(e.target.value as 'user' | 'support' | 'admin')}
+                    >
+                      <option value="user">User</option>
+                      <option value="support">Support</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <span className="text-xs text-muted">Every change is recorded in the Audit Trail.</span>
+                  </div>
+                )}
+                {changeRole.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(changeRole.error)}</p> : null}
+              </div>
+            ) : null}
           </Card>
         ) : null}
       </div>
