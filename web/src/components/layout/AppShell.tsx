@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Menu, X, MessageCircle, User, IdCard, HelpCircle, Repeat, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -65,7 +66,7 @@ export function AppShell() {
             onClick={() => setNavOpen((o) => !o)}
             aria-label={navOpen ? 'Close menu' : 'Open menu'}
           >
-            {navOpen ? '✕' : '☰'}
+            {navOpen ? <X className="h-4 w-4" strokeWidth={2.25} /> : <Menu className="h-4 w-4" strokeWidth={2.25} />}
           </button>
           <span className="btn-gradient-accent grid h-6.5 w-6.5 place-items-center rounded-lg text-xs text-white shadow-[0_4px_12px_-4px_rgba(var(--shadow-tint),0.6)]">SD</span>
           <span className="max-[420px]:hidden">SafeDrive</span>
@@ -86,7 +87,7 @@ export function AppShell() {
               title="Inquire — ask support a question"
               aria-label="Inquire — ask support a question"
             >
-              💬
+              <MessageCircle className="h-4 w-4" strokeWidth={2.25} />
             </NavLink>
             <div className="relative">
             <button
@@ -106,37 +107,37 @@ export function AppShell() {
               <div className="glass animate-[dropdown-in_160ms_cubic-bezier(0.22,1,0.36,1)] absolute right-0 top-11 z-50 w-52 rounded-xl border border-line/70 p-1.5 shadow-xl">
                 <NavLink
                   to="/profile"
-                  className="block rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"
+                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"
                   onClick={() => setMenuOpen(false)}
                 >
-                  👤 My Profile
+                  <User className="h-4 w-4 text-muted" strokeWidth={2.25} /> My Profile
                 </NavLink>
                 <NavLink
                   to="/verify"
-                  className="block rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"
+                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"
                   onClick={() => setMenuOpen(false)}
                 >
-                  🪪 Get Verified
+                  <IdCard className="h-4 w-4 text-muted" strokeWidth={2.25} /> Get Verified
                 </NavLink>
                 <NavLink
                   to="/help"
-                  className="block rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"
+                  className="flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-medium hover:bg-surface-2"
                   onClick={() => setMenuOpen(false)}
                 >
-                  ❓ Help
+                  <HelpCircle className="h-4 w-4 text-muted" strokeWidth={2.25} /> Help
                 </NavLink>
                 <button
-                  className="block w-full rounded-md px-2.5 py-2 text-left text-[13px] font-medium hover:bg-surface-2"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium hover:bg-surface-2"
                   onClick={toggleLister}
                 >
-                  🔁 {profile?.is_lister ? 'Switch to Renter' : 'Switch to Lister'}
+                  <Repeat className="h-4 w-4 text-muted" strokeWidth={2.25} /> {profile?.is_lister ? 'Switch to Renter' : 'Switch to Lister'}
                 </button>
                 <hr className="my-1 border-line" />
                 <button
-                  className="block w-full rounded-md px-2.5 py-2 text-left text-[13px] font-medium hover:bg-surface-2"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium hover:bg-surface-2 hover:text-bad"
                   onClick={() => supabase.auth.signOut()}
                 >
-                  ↩ Log out
+                  <LogOut className="h-4 w-4 text-muted" strokeWidth={2.25} /> Log out
                 </button>
               </div>
             ) : null}

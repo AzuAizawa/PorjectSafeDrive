@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bell } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { cn, formatTimeAgo } from '@/lib/utils';
 import type { Notification } from '@/lib/database.types';
@@ -65,7 +66,7 @@ export function NotificationBell({ userId }: { userId: string }) {
         onClick={() => setOpen((o) => !o)}
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
-        🔔
+        <Bell className="h-4 w-4" strokeWidth={2.25} />
         {unreadCount > 0 ? (
           <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-bad px-1 text-[9px] font-bold text-white">
             {unreadCount > 9 ? '9+' : unreadCount}

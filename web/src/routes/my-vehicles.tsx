@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
+import { Car } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ListerAnalyticsTab } from '@/components/lister-analytics-tab';
 import { cn, formatCurrency } from '@/lib/utils';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
@@ -170,7 +172,14 @@ export function MyVehiclesPage() {
                 ))}
               </tbody>
             </table>
-            {data?.vehicles.length === 0 ? <p className="p-8 text-center text-muted">No vehicles yet.</p> : null}
+            {data?.vehicles.length === 0 ? (
+              <EmptyState
+                icon={Car}
+                title="No vehicles yet"
+                description="List your first car to start earning."
+                action={{ label: '+ Add Vehicle', onClick: () => navigate('/my-vehicles/new') }}
+              />
+            ) : null}
           </div>
         </>
       )}

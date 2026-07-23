@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { publicUrl } from '@/lib/storage';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { formatCurrency } from '@/lib/utils';
 import type { BodyType, VehicleListing } from '@/lib/database.types';
 
@@ -164,7 +166,7 @@ export function BrowsePage() {
       </div>
 
       {!isLoading && filtered.length === 0 ? (
-        <p className="py-16 text-center text-muted">No cars match your filters. Try widening your search.</p>
+        <EmptyState icon={SearchX} title="No cars match your filters" description="Try widening your search or dates." />
       ) : null}
     </div>
   );

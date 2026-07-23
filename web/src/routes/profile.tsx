@@ -1,13 +1,15 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TwoFactorSection } from '@/components/two-factor-section';
 import { Avatar } from '@/components/ui/avatar';
+import { RatingBadge } from '@/components/ui/pill';
+import { fetchRatingSummaries } from '@/lib/ratings';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 
 const schema = z.object({
@@ -36,6 +38,11 @@ type PayoutValues = z.infer<typeof payoutSchema>;
 
 export function ProfilePage() {
   const { profile, refreshProfile } = useAuth();
+  const { data: ownRating } = useQuery({
+    queryKey: ['rating-summaries', 'self', profile?.id],
+    queryFn: async () => (await fetchRatingSummaries([profile!.id])).get(profile!.id),
+    enabled: !!profile,
+  });
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -108,6 +115,12 @@ export function ProfilePage() {
                 ? 'Your face-only selfie is shown to renters/owners as your profile picture.'
                 : "Your profile picture is set from your selfie once you're verified."}
             </p>
+            {ownRating ? (
+              <div className="mt-1.5 flex items-center gap-1.5 text-xs">
+                <span className="text-muted">Your rating:</span>
+                <RatingBadge avg={ownRating.avg} count={ownRating.count} />
+              </div>
+            ) : null}
           </div>
         </div>
         <dl className="mb-5 grid grid-cols-2 gap-3 text-[13px]">

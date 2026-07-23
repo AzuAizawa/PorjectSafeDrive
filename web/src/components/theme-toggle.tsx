@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Moon, Sun } from 'lucide-react';
 
 type Theme = 'light' | 'dark';
 
@@ -29,7 +30,7 @@ export function ThemeToggle() {
       title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
       aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
     >
-      {theme === 'dark' ? '🌙' : '☀️'}
+      {theme === 'dark' ? <Moon className="h-4 w-4" strokeWidth={2.25} /> : <Sun className="h-4 w-4" strokeWidth={2.25} />}
     </button>
   );
 }

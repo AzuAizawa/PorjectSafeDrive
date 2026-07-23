@@ -6,77 +6,92 @@
   verified/"go" — a highway-signage pairing), semantic status colors kept
   distinct from the accent hue.
 */
+/*
+  2026-07-23 refresh: the original palette tested as "plain and gloomy" in
+  real use. Root causes fixed here: (1) surface steps in dark mode sat too
+  close together (paper/surface/surface-2 were all near-identical darkness),
+  reading as murky rather than a deliberate premium dark theme; (2) the
+  accent teal was muted/desaturated in both themes, so the one color meant
+  to carry visual energy barely registered; (3) status colors (warn/good/
+  bad/info) were flat rather than vivid. Kept the same *hues* (teal +
+  indigo, cool concrete-grey neutrals) so this reads as a brighter version
+  of the same system, not an unrelated repaint.
+*/
 :root {
-  --color-ink: #14191a;
-  --color-paper: #f2f5f4;
+  --color-ink: #12181a;
+  --color-paper: #f3f6f5;
   --color-surface: #ffffff;
-  --color-surface-2: #eaf0ee;
-  --color-line: #dce6e3;
-  --color-muted: #5c6e6a;
-  --color-muted-2: #82938f;
+  --color-surface-2: #e7efec;
+  --color-line: #d5e2de;
+  --color-muted: #55716b;
+  --color-muted-2: #7c9691;
 
-  --color-accent: #0e7c6b;
-  --color-accent-strong: #0a5c4f;
-  --color-accent-soft: #e1f1ee;
-  /* Second brand hue — deep indigo — used only for the primary-button/logo
-     gradient and the ambient background blooms, never as a status color. */
-  --color-accent-2: #3a5cc7;
+  --color-accent: #069478;
+  --color-accent-strong: #04725a;
+  --color-accent-soft: #dcf3ec;
+  /* Second brand hue — indigo — used for the primary-button/logo gradient
+     and the ambient background blooms, never as a status color. */
+  --color-accent-2: #4a5fe0;
 
-  --color-warn: #b9740f;
-  --color-warn-soft: #fbeeda;
-  --color-good: #2e9e5b;
-  --color-good-soft: #e4f6ea;
-  --color-bad: #c13f2c;
-  --color-bad-soft: #fbe8e3;
-  --color-info: #2f6690;
-  --color-info-soft: #e5eef4;
+  --color-warn: #b8720a;
+  --color-warn-soft: #fcefd8;
+  --color-good: #1f9a56;
+  --color-good-soft: #ddf5e5;
+  --color-bad: #d13c28;
+  --color-bad-soft: #fce3de;
+  --color-info: #1f74a8;
+  --color-info-soft: #dcf0f9;
 
-  --shadow-tint: 14, 124, 107;
+  --shadow-tint: 6, 148, 120;
+  --glow-tint: 6, 148, 120;
   --glass-blur: 18px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-ink: #e8f1ee;
-    --color-paper: #0d1313;
-    --color-surface: #151d1c;
-    --color-surface-2: #1b2523;
-    --color-line: #263231;
-    --color-muted: #8fa6a1;
-    --color-muted-2: #6d827d;
+    --color-ink: #eef6f3;
+    --color-paper: #0a1413;
+    --color-surface: #142524;
+    --color-surface-2: #1e3532;
+    --color-line: #2e4d47;
+    --color-muted: #9ab8b0;
+    --color-muted-2: #6f938a;
 
-    --color-accent: #2cbba0;
-    --color-accent-strong: #5ad2bb;
-    --color-accent-soft: #113029;
-    --color-accent-2: #7b95e8;
+    --color-accent: #2fe3bd;
+    --color-accent-strong: #7bf2d6;
+    --color-accent-soft: #12352f;
+    --color-accent-2: #93a4f7;
 
-    --color-warn: #e0a23e;
-    --color-warn-soft: #2e2210;
-    --color-good: #4ec384;
-    --color-good-soft: #10301f;
-    --color-bad: #e4695a;
-    --color-bad-soft: #331714;
-    --color-info: #6fa8cf;
-    --color-info-soft: #132430;
+    --color-warn: #f5b85a;
+    --color-warn-soft: #34270f;
+    --color-good: #5be0a0;
+    --color-good-soft: #113827;
+    --color-bad: #f2836f;
+    --color-bad-soft: #3a1a15;
+    --color-info: #78c2ee;
+    --color-info-soft: #102c3b;
 
     --shadow-tint: 0, 0, 0;
+    --glow-tint: 47, 227, 189;
   }
 }
 :root[data-theme='dark'] {
-  --color-ink: #e8f1ee; --color-paper: #0d1313; --color-surface: #151d1c; --color-surface-2: #1b2523;
-  --color-line: #263231; --color-muted: #8fa6a1; --color-muted-2: #6d827d;
-  --color-accent: #2cbba0; --color-accent-strong: #5ad2bb; --color-accent-soft: #113029; --color-accent-2: #7b95e8;
-  --color-warn: #e0a23e; --color-warn-soft: #2e2210; --color-good: #4ec384; --color-good-soft: #10301f;
-  --color-bad: #e4695a; --color-bad-soft: #331714; --color-info: #6fa8cf; --color-info-soft: #132430;
+  --color-ink: #eef6f3; --color-paper: #0a1413; --color-surface: #142524; --color-surface-2: #1e3532;
+  --color-line: #2e4d47; --color-muted: #9ab8b0; --color-muted-2: #6f938a;
+  --color-accent: #2fe3bd; --color-accent-strong: #7bf2d6; --color-accent-soft: #12352f; --color-accent-2: #93a4f7;
+  --color-warn: #f5b85a; --color-warn-soft: #34270f; --color-good: #5be0a0; --color-good-soft: #113827;
+  --color-bad: #f2836f; --color-bad-soft: #3a1a15; --color-info: #78c2ee; --color-info-soft: #102c3b;
   --shadow-tint: 0, 0, 0;
+  --glow-tint: 47, 227, 189;
 }
 :root[data-theme='light'] {
-  --color-ink: #14191a; --color-paper: #f2f5f4; --color-surface: #ffffff; --color-surface-2: #eaf0ee;
-  --color-line: #dce6e3; --color-muted: #5c6e6a; --color-muted-2: #82938f;
-  --color-accent: #0e7c6b; --color-accent-strong: #0a5c4f; --color-accent-soft: #e1f1ee; --color-accent-2: #3a5cc7;
-  --color-warn: #b9740f; --color-warn-soft: #fbeeda; --color-good: #2e9e5b; --color-good-soft: #e4f6ea;
-  --color-bad: #c13f2c; --color-bad-soft: #fbe8e3; --color-info: #2f6690; --color-info-soft: #e5eef4;
-  --shadow-tint: 14, 124, 107;
+  --color-ink: #12181a; --color-paper: #f3f6f5; --color-surface: #ffffff; --color-surface-2: #e7efec;
+  --color-line: #d5e2de; --color-muted: #55716b; --color-muted-2: #7c9691;
+  --color-accent: #069478; --color-accent-strong: #04725a; --color-accent-soft: #dcf3ec; --color-accent-2: #4a5fe0;
+  --color-warn: #b8720a; --color-warn-soft: #fcefd8; --color-good: #1f9a56; --color-good-soft: #ddf5e5;
+  --color-bad: #d13c28; --color-bad-soft: #fce3de; --color-info: #1f74a8; --color-info-soft: #dcf0f9;
+  --shadow-tint: 6, 148, 120;
+  --glow-tint: 6, 148, 120;
 }
 
 /* Maps the tokens above onto Tailwind utilities: bg-accent, text-muted, border-line, etc. */
@@ -119,13 +134,16 @@ body {
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
-  /* Ambient gradient wallpaper — soft, low-opacity blooms of both brand
-     hues, fixed so it stays put while glass surfaces blur it on scroll. */
+  /* Ambient gradient wallpaper — blooms of both brand hues, fixed so it
+     stays put while glass surfaces blur it on scroll. Raised from the
+     original 16/14/8% — at that strength the blooms were nearly invisible
+     against either theme's base, which was a real contributor to the
+     "plain and flat" feel. */
   background-color: var(--color-paper);
   background-image:
-    radial-gradient(760px circle at 8% -8%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 60%),
-    radial-gradient(640px circle at 108% 12%, color-mix(in oklab, var(--color-accent-2) 14%, transparent), transparent 60%),
-    radial-gradient(900px circle at 50% 120%, color-mix(in oklab, var(--color-accent) 8%, transparent), transparent 65%);
+    radial-gradient(760px circle at 8% -8%, color-mix(in oklab, var(--color-accent) 26%, transparent), transparent 60%),
+    radial-gradient(640px circle at 108% 12%, color-mix(in oklab, var(--color-accent-2) 22%, transparent), transparent 60%),
+    radial-gradient(900px circle at 50% 120%, color-mix(in oklab, var(--color-accent) 14%, transparent), transparent 65%);
   background-attachment: fixed;
 }
 h1, h2, h3, h4 {
