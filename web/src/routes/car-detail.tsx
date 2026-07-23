@@ -13,7 +13,7 @@ import { formatCurrency } from '@/lib/utils';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { PlatformSetting, VehicleListing } from '@/lib/database.types';
 
-async function fetchVehicle(id: string): Promise<VehicleListing> {
+async function fetchVehicle(id: string): Promise<VehicleListing & { image_urls: string[] }> {
   const { data, error } = await supabase
     .from('vehicles')
     .select(
@@ -24,7 +24,10 @@ async function fetchVehicle(id: string): Promise<VehicleListing> {
     .single();
   if (error) throw error;
   const images = (data as any).vehicle_images?.sort((a: any, b: any) => a.sort_order - b.sort_order) ?? [];
-  return { ...(data as any), cover_image_url: publicUrl('car-images', images[0]?.storage_path ?? null) };
+  // Every uploaded photo (up to 4), not just the cover — previously only the
+  // first image was ever surfaced to renters, the rest were silently dropped.
+  const imageUrls = images.map((img: any) => publicUrl('car-images', img.storage_path)).filter(Boolean) as string[];
+  return { ...(data as any), cover_image_url: imageUrls[0] ?? null, image_urls: imageUrls };
 }
 
 async function fetchSettings(): Promise<Record<string, number>> {
@@ -57,6 +60,7 @@ export function CarDetailPage() {
   const [endDate, setEndDate] = useState('');
   const [pickupTime, setPickupTime] = useState('10:00');
   const [reportOpen, setReportOpen] = useState(false);
+  const [activeImage, setActiveImage] = useState(0);
 
   const { data: vehicle } = useQuery({ queryKey: ['vehicle', id], queryFn: () => fetchVehicle(id!), enabled: !!id });
   const { data: settings } = useQuery({ queryKey: ['platform_settings'], queryFn: fetchSettings });
@@ -121,10 +125,30 @@ export function CarDetailPage() {
       <div className="grid grid-cols-[1.6fr_1fr] items-start gap-6 max-[860px]:grid-cols-1">
         <div>
           <div className="h-80 rounded-2xl bg-surface-2">
-            {vehicle.cover_image_url ? (
-              <img src={vehicle.cover_image_url} alt={vehicle.model.name} className="h-full w-full rounded-2xl object-cover" />
+            {vehicle.image_urls[activeImage] ? (
+              <img
+                src={vehicle.image_urls[activeImage]}
+                alt={vehicle.model.name}
+                className="h-full w-full rounded-2xl object-cover"
+              />
             ) : null}
           </div>
+          {vehicle.image_urls.length > 1 ? (
+            <div className="mt-2 flex gap-2">
+              {vehicle.image_urls.map((url, i) => (
+                <button
+                  key={url}
+                  type="button"
+                  onClick={() => setActiveImage(i)}
+                  className={`h-16 w-20 shrink-0 overflow-hidden rounded-lg border-2 ${
+                    i === activeImage ? 'border-accent' : 'border-transparent'
+                  }`}
+                >
+                  <img src={url} alt={`${vehicle.model.name} photo ${i + 1}`} className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div className="mt-5 flex items-start justify-between">
             <div>
@@ -152,7 +176,12 @@ export function CarDetailPage() {
               ['Body type', vehicle.model.body_type],
               ['Seats', vehicle.model.seats],
               ['Fuel type', vehicle.model.fuel_type],
+              ['Transmission', vehicle.transmission === 'automatic' ? 'Automatic' : 'Manual'],
+              ...(vehicle.model_year ? [['Model year', vehicle.model_year]] : []),
               ['Pickup / drop-off', vehicle.pickup_location],
+              ...(vehicle.requires_deposit
+                ? [['Refundable security deposit', formatCurrency(vehicle.deposit_amount ?? 0)]]
+                : []),
             ].map(([label, value]) => (
               <div key={label as string} className="flex justify-between border-b border-line py-2.5 text-[13.5px] last:border-none">
                 <span className="text-muted">{label}</span>
@@ -165,6 +194,29 @@ export function CarDetailPage() {
             <Card className="mt-3.5 p-5">
               <h3 className="mb-2 text-sm font-bold">From the owner</h3>
               <p className="text-muted">{vehicle.additional_info}</p>
+            </Card>
+          ) : null}
+
+          {settings ? (
+            <Card className="mt-3.5 p-5">
+              <h3 className="mb-2 text-sm font-bold">Booking policies</h3>
+              <ul className="flex flex-col gap-2 text-[13px] text-muted">
+                <li>
+                  You must be at least <strong className="text-ink">{settings.minimum_renter_age}</strong> years old and
+                  verified to book.
+                </li>
+                <li>
+                  Free cancellation for <strong className="text-ink">{settings.free_cancel_hours}h</strong> after paying,
+                  as long as it's more than <strong className="text-ink">{settings.no_free_cancel_hours_before_pickup}h</strong>{' '}
+                  before pickup. After that, a <strong className="text-ink">{settings.cancellation_fee_percent}%</strong> fee
+                  applies.
+                </li>
+                <li>
+                  Show up within <strong className="text-ink">{settings.no_show_grace_minutes} minutes</strong> of your
+                  chosen pickup time — after that, the owner may cancel the booking with a cancellation fee and a strike
+                  on your account.
+                </li>
+              </ul>
             </Card>
           ) : null}
 
@@ -250,6 +302,12 @@ export function CarDetailPage() {
                 <span>Balance due before pickup</span>
                 <span className="tabular">{formatCurrency(pricing.balance)}</span>
               </div>
+              {vehicle.requires_deposit ? (
+                <div className="flex justify-between py-2 text-[13.5px] text-muted">
+                  <span>Security deposit (refundable, paid with downpayment)</span>
+                  <span className="tabular">{formatCurrency(vehicle.deposit_amount ?? 0)}</span>
+                </div>
+              ) : null}
             </>
           ) : (
             <p className="text-sm text-muted">Pick your dates to see pricing.</p>

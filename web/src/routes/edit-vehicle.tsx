@@ -23,6 +23,7 @@ const schema = z.object({
     .length(7, 'LTO plates are exactly 7 characters')
     .regex(/^[A-Z0-9]+$/i, 'Letters and numbers only'),
   model_year: z.coerce.number().int().min(1980).max(new Date().getFullYear()),
+  transmission: z.enum(['manual', 'automatic']),
   daily_price: z.coerce.number().positive('Must be greater than 0').max(999999, 'That seems too high'),
   pickup_location: z.string().min(1, 'Required').max(200),
   additional_info: z.string().max(1000).optional(),
@@ -89,6 +90,7 @@ export function EditVehiclePage() {
           model_id: data.vehicle.model_id,
           plate_number: data.vehicle.plate_number,
           model_year: data.vehicle.model_year ?? new Date().getFullYear(),
+          transmission: data.vehicle.transmission,
           daily_price: data.vehicle.daily_price,
           pickup_location: data.vehicle.pickup_location,
           additional_info: data.vehicle.additional_info ?? '',
@@ -149,6 +151,7 @@ export function EditVehiclePage() {
           model_id: values.model_id,
           plate_number: values.plate_number.toUpperCase(),
           model_year: values.model_year,
+          transmission: values.transmission,
           daily_price: values.daily_price,
           pickup_location: values.pickup_location,
           additional_info: values.additional_info || null,
@@ -231,6 +234,12 @@ export function EditVehiclePage() {
                 maxLength={4}
                 {...register('model_year')}
               />
+            </Field>
+            <Field label="Transmission" error={errors.transmission}>
+              <select className="input-base" {...register('transmission')}>
+                <option value="automatic">Automatic</option>
+                <option value="manual">Manual</option>
+              </select>
             </Field>
             <Field label="Daily price (₱)" error={errors.daily_price}>
               <input type="number" className="input-base" min={1} max={999999} {...register('daily_price')} />

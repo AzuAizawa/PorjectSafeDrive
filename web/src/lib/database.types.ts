@@ -6,6 +6,7 @@ export type VerifiedStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
 export type AccountStatus = 'active' | 'suspended' | 'banned';
 export type BodyType = 'sedan' | 'suv' | 'hatchback' | 'van' | 'pickup' | 'coupe' | 'convertible' | 'wagon' | 'mpv';
 export type FuelType = 'gasoline' | 'diesel' | 'electric' | 'hybrid';
+export type Transmission = 'manual' | 'automatic';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type ListingStatus = 'active' | 'paused_by_owner' | 'paused_over_quota';
 export type BookingStatus =
@@ -89,6 +90,7 @@ export interface Vehicle {
   model_id: string;
   plate_number: string;
   model_year: number | null;
+  transmission: Transmission;
   daily_price: number;
   pickup_location: string;
   additional_info: string | null;
