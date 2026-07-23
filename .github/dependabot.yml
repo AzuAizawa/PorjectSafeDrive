@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Batch routine patch/minor bumps into one PR instead of ~20 separate
+      # ones each week; anything major stays its own PR since those are the
+      # ones actually worth reviewing individually.
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
