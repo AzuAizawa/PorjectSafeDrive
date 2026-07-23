@@ -10,7 +10,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileUploadBox, validateFile } from '@/components/file-upload-box';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
-import type { CarBrand, CarModel, Vehicle, VehicleImage } from '@/lib/database.types';
+import { formatDate } from '@/lib/utils';
+import type { CarBrand, CarModel, Vehicle, VehicleBlockedDate, VehicleImage } from '@/lib/database.types';
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png'];
 
@@ -48,6 +49,16 @@ async function fetchVehicle(id: string) {
   return { vehicle: vehicle as VehicleRow, images: (images ?? []) as VehicleImage[], brands: brands as CarBrand[], models: models as CarModel[] };
 }
 
+async function fetchBlockedDates(vehicleId: string) {
+  const { data, error } = await supabase
+    .from('vehicle_blocked_dates')
+    .select('*')
+    .eq('vehicle_id', vehicleId)
+    .order('start_date');
+  if (error) throw error;
+  return data as VehicleBlockedDate[];
+}
+
 const SENSITIVE_FIELDS = ['plate_number', 'model_id', 'model_year'] as const;
 
 export function EditVehiclePage() {
@@ -58,8 +69,17 @@ export function EditVehiclePage() {
   const [newImagesError, setNewImagesError] = useState<string | null>(null);
   const [newOrcr, setNewOrcr] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [blockStart, setBlockStart] = useState('');
+  const [blockEnd, setBlockEnd] = useState('');
+  const [blockReason, setBlockReason] = useState('');
+  const [blockError, setBlockError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({ queryKey: ['vehicle-edit', id], queryFn: () => fetchVehicle(id!), enabled: !!id });
+  const { data: blockedDates } = useQuery({
+    queryKey: ['vehicle-blocked-dates', id],
+    queryFn: () => fetchBlockedDates(id!),
+    enabled: !!id,
+  });
 
   const { register, handleSubmit, watch, formState: { errors, dirtyFields } } = useForm<FormInput>({
     resolver: zodResolver(schema),
@@ -90,6 +110,35 @@ export function EditVehiclePage() {
       if (delErr) throw delErr;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['vehicle-edit', id] }),
+  });
+
+  const addBlockedDates = useMutation({
+    mutationFn: async () => {
+      const { error: insertErr } = await supabase
+        .from('vehicle_blocked_dates')
+        .insert({ vehicle_id: id, start_date: blockStart, end_date: blockEnd, reason: blockReason || null });
+      if (insertErr) throw insertErr;
+    },
+    onSuccess: () => {
+      setBlockStart('');
+      setBlockEnd('');
+      setBlockReason('');
+      setBlockError(null);
+      queryClient.invalidateQueries({ queryKey: ['vehicle-blocked-dates', id] });
+      queryClient.invalidateQueries({ queryKey: ['vehicle-calendar'] });
+    },
+    onError: (e: Error) => setBlockError(friendlyErrorMessage(e)),
+  });
+
+  const removeBlockedDates = useMutation({
+    mutationFn: async (blockedId: string) => {
+      const { error: delErr } = await supabase.from('vehicle_blocked_dates').delete().eq('id', blockedId);
+      if (delErr) throw delErr;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vehicle-blocked-dates', id] });
+      queryClient.invalidateQueries({ queryKey: ['vehicle-calendar'] });
+    },
   });
 
   const submit = useMutation({
@@ -264,6 +313,47 @@ export function EditVehiclePage() {
             </Button>
           </div>
         </form>
+      </Card>
+
+      <Card className="mt-3.5 p-5">
+        <h3 className="mb-1 text-sm font-bold">Blocked Dates</h3>
+        <p className="mb-3 text-xs text-muted">
+          Mark dates this car is unavailable for personal use — renters will see these greyed out on the booking calendar.
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          {blockedDates?.map((bd) => (
+            <span key={bd.id} className="flex items-center gap-2 rounded-full bg-warn-soft px-3 py-1 text-xs font-semibold text-warn">
+              {formatDate(bd.start_date)} – {formatDate(bd.end_date)}
+              {bd.reason ? ` · ${bd.reason}` : ''}
+              <button type="button" className="text-warn hover:text-bad" onClick={() => removeBlockedDates.mutate(bd.id)}>
+                ✕
+              </button>
+            </span>
+          ))}
+          {blockedDates?.length === 0 ? <p className="text-xs text-muted">No blocked dates yet.</p> : null}
+        </div>
+
+        <div className="mt-4 grid grid-cols-[1fr_1fr_1.4fr_auto] items-end gap-2">
+          <Field label="From">
+            <input type="date" className="input-base" value={blockStart} onChange={(e) => setBlockStart(e.target.value)} />
+          </Field>
+          <Field label="To">
+            <input type="date" className="input-base" value={blockEnd} onChange={(e) => setBlockEnd(e.target.value)} />
+          </Field>
+          <Field label="Reason (optional)">
+            <input className="input-base" maxLength={100} value={blockReason} onChange={(e) => setBlockReason(e.target.value)} />
+          </Field>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!blockStart || !blockEnd || addBlockedDates.isPending}
+            onClick={() => addBlockedDates.mutate()}
+          >
+            Block
+          </Button>
+        </div>
+        {blockError ? <p className="mt-2 text-xs text-bad">{blockError}</p> : null}
       </Card>
     </div>
   );

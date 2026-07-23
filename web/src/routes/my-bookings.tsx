@@ -1,21 +1,26 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { CarFront, CalendarClock, History } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BookingStatusPill, RatingBadge } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
 import { ReportIssueDialog } from '@/components/report-issue-dialog';
 import { RateBookingDialog } from '@/components/rate-booking-dialog';
 import { EmergencyBanner } from '@/components/emergency-banner';
 import { BookingChat } from '@/components/booking-chat';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { previewCancellation } from '@/lib/cancellation';
 import { signedUrl } from '@/lib/storage';
 import { fetchRatingSummaries } from '@/lib/ratings';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
+import { formatTime, pickupTimestamp, useNoShowGraceMinutes } from '@/lib/pickup';
+import { isHistoryStatus } from '@/lib/booking-status';
 import type { Booking, CarModel, CarBrand, Profile } from '@/lib/database.types';
 
 type BookingRow = Booking & {
@@ -40,11 +45,12 @@ async function fetchCancellationSettings() {
   const { data, error } = await supabase
     .from('platform_settings')
     .select('key, value')
-    .in('key', ['free_cancel_hours', 'cancellation_fee_percent']);
+    .in('key', ['free_cancel_hours', 'cancellation_fee_percent', 'no_free_cancel_hours_before_pickup']);
   if (error) throw error;
   return Object.fromEntries(data.map((s) => [s.key, Number(s.value)])) as {
     free_cancel_hours: number;
     cancellation_fee_percent: number;
+    no_free_cancel_hours_before_pickup: number;
   };
 }
 
@@ -56,11 +62,13 @@ async function fetchMyReviewedBookingIds(reviewerId: string) {
 
 export function MyBookingsPage() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const cancelDialog = useConfirmTarget<string>();
   const reportDialog = useConfirmTarget<string>();
   const rateDialog = useConfirmTarget<string>();
   const [chatOpenId, setChatOpenId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'active' | 'history'>('active');
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings', 'mine', profile?.id],
@@ -68,6 +76,7 @@ export function MyBookingsPage() {
     enabled: !!profile,
   });
   const { data: settings } = useQuery({ queryKey: ['cancellation-settings'], queryFn: fetchCancellationSettings });
+  const { data: graceMinutes } = useNoShowGraceMinutes();
   const { data: reviewedIds } = useQuery({
     queryKey: ['my-reviewed-bookings', profile?.id],
     queryFn: () => fetchMyReviewedBookingIds(profile!.id),
@@ -97,9 +106,9 @@ export function MyBookingsPage() {
     },
     onError: (e) => setActionError(friendlyErrorMessage(e)),
   });
-  const markComplete = useMutation({
+  const reportOwnerNoShow = useMutation({
     mutationFn: async (bookingId: string) => {
-      const { error } = await supabase.rpc('mark_complete', { p_booking_id: bookingId });
+      const { error } = await supabase.rpc('report_owner_no_show', { p_booking_id: bookingId });
       if (error) throw error;
     },
     onSuccess: invalidate,
@@ -124,6 +133,9 @@ export function MyBookingsPage() {
   const targetBooking = bookings?.find((b) => b.id === cancelDialog.target);
   const preview = targetBooking && settings ? previewCancellation(targetBooking, settings) : null;
   const rateTargetBooking = bookings?.find((b) => b.id === rateDialog.target);
+  const visibleBookings = bookings?.filter((b) => (tab === 'history' ? isHistoryStatus(b.status) : !isHistoryStatus(b.status)));
+  const historyCount = bookings?.filter((b) => isHistoryStatus(b.status)).length ?? 0;
+  const activeCount = bookings ? bookings.length - historyCount : 0;
 
   return (
     <div>
@@ -138,8 +150,23 @@ export function MyBookingsPage() {
         <p className="mb-4 rounded-md border border-bad bg-bad-soft p-3 text-sm text-bad">{actionError}</p>
       ) : null}
 
+      <div className="mb-4 flex gap-1 border-b border-line">
+        {(['active', 'history'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={cn(
+              '-mb-px border-b-2 px-3 py-2 text-sm font-semibold',
+              tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
+            )}
+          >
+            {t === 'active' ? `Active (${activeCount})` : `History (${historyCount})`}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-col gap-3.5">
-        {bookings?.map((b) => (
+        {visibleBookings?.map((b) => (
           <Card key={b.id} className="flex gap-4 p-5">
             <div className="flex-1">
               <div className="flex items-start justify-between">
@@ -148,7 +175,7 @@ export function MyBookingsPage() {
                     {b.vehicle.model.brand.name} {b.vehicle.model.name} · {b.vehicle.plate_number}
                   </div>
                   <div className="text-xs text-muted">
-                    {formatDate(b.start_date)} – {formatDate(b.end_date)} · {b.total_days} days
+                    {formatDate(b.start_date)} – {formatDate(b.end_date)} · {b.total_days} days · Pickup {formatTime(b.pickup_time)}
                   </div>
                 </div>
                 <BookingStatusPill status={b.status} />
@@ -193,11 +220,20 @@ export function MyBookingsPage() {
                     Cancel
                   </Button>
                 ) : null}
+                {(b.status === 'downpayment_paid' || b.status === 'fully_paid') &&
+                graceMinutes != null &&
+                Date.now() >= pickupTimestamp(b.start_date, b.pickup_time) + graceMinutes * 60_000 ? (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={reportOwnerNoShow.isPending}
+                    onClick={() => reportOwnerNoShow.mutate(b.id)}
+                  >
+                    Owner Didn't Show Up
+                  </Button>
+                ) : null}
                 {b.status === 'active' ? (
-                  <>
-                    <Button variant="danger" size="sm" onClick={() => reportDialog.open(b.id)}>Report an Issue</Button>
-                    <Button size="sm" onClick={() => markComplete.mutate(b.id)}>Mark Complete</Button>
-                  </>
+                  <Button variant="danger" size="sm" onClick={() => reportDialog.open(b.id)}>Report an Issue</Button>
                 ) : null}
                 {b.status === 'completed' ? (
                   reviewedIds?.has(b.id) ? (
@@ -233,7 +269,17 @@ export function MyBookingsPage() {
         ))}
 
         {bookings?.length === 0 ? (
-          <p className="py-16 text-center text-muted">No bookings yet — go find a car on Browse.</p>
+          <EmptyState
+            icon={CarFront}
+            title="No bookings yet"
+            description="Find a car on Browse and send your first booking request."
+            action={{ label: 'Browse Cars', onClick: () => navigate('/browse') }}
+          />
+        ) : visibleBookings?.length === 0 ? (
+          <EmptyState
+            icon={tab === 'history' ? History : CalendarClock}
+            title={tab === 'history' ? "You don't have any past bookings yet" : 'Nothing active right now'}
+          />
         ) : null}
       </div>
 

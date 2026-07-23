@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { previewCancellation } from './cancellation';
 import type { Booking } from './database.types';
 
-const settings = { free_cancel_hours: 24, cancellation_fee_percent: 20 };
+const settings = { free_cancel_hours: 24, cancellation_fee_percent: 20, no_free_cancel_hours_before_pickup: 24 };
+
+// Far enough out that "close to pickup" never accidentally triggers in the
+// baseline fixture, no matter when the suite actually runs.
+const FAR_FUTURE_START = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+const FAR_FUTURE_END = new Date(Date.now() + 34 * 86_400_000).toISOString().slice(0, 10);
 
 function makeBooking(overrides: Partial<Booking> = {}): Booking {
   return {
@@ -10,8 +15,9 @@ function makeBooking(overrides: Partial<Booking> = {}): Booking {
     vehicle_id: 'v1',
     renter_id: 'r1',
     owner_id: 'o1',
-    start_date: '2026-08-01',
-    end_date: '2026-08-05',
+    start_date: FAR_FUTURE_START,
+    end_date: FAR_FUTURE_END,
+    pickup_time: '10:00:00',
     total_days: 4,
     base_price: 4000,
     commission: 400,
@@ -32,6 +38,7 @@ function makeBooking(overrides: Partial<Booking> = {}): Booking {
     payment_deadline: null,
     renter_completed: false,
     owner_completed: false,
+    completed_at: null,
     created_at: '2026-07-01T00:00:00.000Z',
     updated_at: '2026-07-01T00:00:00.000Z',
     ...overrides,
@@ -87,5 +94,30 @@ describe('previewCancellation', () => {
     const result = previewCancellation(booking, settings);
     expect(result.fee).toBeCloseTo(booking.total_price * 0.2);
     expect(result.refund).toBeCloseTo(booking.total_price - result.fee);
+  });
+
+  it('withdraws free cancellation when pickup is too close, even seconds after paying', () => {
+    // previewCancellation reads start_date+pickup_time as Manila (UTC+8) wall-clock
+    // time, so shift the target instant by +8h before reading its UTC date/time parts.
+    const pickupInstant = Date.now() + 12 * 3_600_000; // pickup in 12h
+    const manilaWallClock = new Date(pickupInstant + 8 * 3_600_000);
+    const booking = makeBooking({
+      start_date: manilaWallClock.toISOString().slice(0, 10),
+      pickup_time: manilaWallClock.toISOString().slice(11, 19),
+      downpayment_paid: true,
+      downpayment_paid_at: new Date().toISOString(), // just paid
+    });
+    const result = previewCancellation(booking, settings);
+    expect(result.free).toBe(false);
+    expect(result.fee).toBeCloseTo(booking.total_price * 0.2);
+  });
+
+  it('still allows free cancellation right after paying when pickup is far away', () => {
+    const booking = makeBooking({
+      downpayment_paid: true,
+      downpayment_paid_at: new Date().toISOString(),
+    });
+    const result = previewCancellation(booking, settings);
+    expect(result.free).toBe(true);
   });
 });

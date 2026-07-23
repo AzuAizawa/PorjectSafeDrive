@@ -11,13 +11,24 @@ import type { Dispute, Profile } from '@/lib/database.types';
 
 type DisputeRow = Dispute & {
   reporter: Pick<Profile, 'first_name' | 'last_name'>;
-  booking: { vehicle_id: string };
+  booking: {
+    vehicle_id: string;
+    renter_id: string;
+    owner_id: string;
+    renter: Pick<Profile, 'first_name' | 'last_name'>;
+    owner: Pick<Profile, 'first_name' | 'last_name'>;
+  };
 };
 
 async function fetchDisputes() {
   const { data, error } = await supabase
     .from('disputes')
-    .select('*, reporter:profiles(first_name, last_name), booking:bookings(vehicle_id)')
+    .select(
+      `*, reporter:profiles(first_name, last_name),
+       booking:bookings(vehicle_id, renter_id, owner_id,
+         renter:profiles!bookings_renter_id_fkey(first_name, last_name),
+         owner:profiles!bookings_owner_id_fkey(first_name, last_name))`
+    )
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data as unknown as DisputeRow[];
@@ -29,6 +40,7 @@ export function AdminDisputesPage() {
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [refundAmount, setRefundAmount] = useState('0');
+  const [strikeTarget, setStrikeTarget] = useState<'none' | 'renter' | 'owner'>('none');
 
   const { data: disputes } = useQuery({ queryKey: ['admin-disputes'], queryFn: fetchDisputes });
 
@@ -36,16 +48,20 @@ export function AdminDisputesPage() {
     setSelected(d);
     setNotes('');
     setRefundAmount('0');
+    setStrikeTarget('none');
     const urls = await Promise.all(d.photo_paths.map((p) => signedUrl('dispute-evidence', p)));
     setPhotoUrls(urls);
   }
 
   const resolve = useMutation({
     mutationFn: async () => {
+      const strikeProfileId =
+        strikeTarget === 'renter' ? selected!.booking.renter_id : strikeTarget === 'owner' ? selected!.booking.owner_id : null;
       const { error } = await supabase.rpc('resolve_dispute', {
         p_dispute_id: selected!.id,
         p_resolution_notes: notes,
         p_refund_amount: Number(refundAmount) || 0,
+        p_strike_profile_id: strikeProfileId,
       });
       if (error) throw error;
     },
@@ -113,6 +129,16 @@ export function AdminDisputesPage() {
                   value={refundAmount}
                   onChange={(e) => setRefundAmount(e.target.value)}
                 />
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">Add a strike to</label>
+                <select
+                  className="input-base mb-3"
+                  value={strikeTarget}
+                  onChange={(e) => setStrikeTarget(e.target.value as 'none' | 'renter' | 'owner')}
+                >
+                  <option value="none">No one</option>
+                  <option value="renter">Renter — {selected.booking.renter.first_name} {selected.booking.renter.last_name}</option>
+                  <option value="owner">Owner — {selected.booking.owner.first_name} {selected.booking.owner.last_name}</option>
+                </select>
                 <div className="flex justify-end">
                   <Button size="sm" disabled={!notes || resolve.isPending} onClick={() => resolve.mutate()}>
                     Resolve Dispute

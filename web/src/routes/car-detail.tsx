@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { AvailabilityCalendar } from '@/components/availability-calendar';
 import { formatCurrency } from '@/lib/utils';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { PlatformSetting, VehicleListing } from '@/lib/database.types';
@@ -54,6 +55,7 @@ export function CarDetailPage() {
   const queryClient = useQueryClient();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [pickupTime, setPickupTime] = useState('10:00');
   const [reportOpen, setReportOpen] = useState(false);
 
   const { data: vehicle } = useQuery({ queryKey: ['vehicle', id], queryFn: () => fetchVehicle(id!), enabled: !!id });
@@ -97,6 +99,7 @@ export function CarDetailPage() {
         p_vehicle_id: id,
         p_start_date: startDate,
         p_end_date: endDate,
+        p_pickup_time: pickupTime,
       });
       if (error) throw error;
       return data;
@@ -201,19 +204,26 @@ export function CarDetailPage() {
         </div>
 
         <Card className="sticky top-[76px] p-5">
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">Start date</label>
-          <input
-            type="date"
-            className="mb-3 h-[38px] w-full rounded-md border border-line bg-surface px-3"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">Pick your dates</label>
+          <AvailabilityCalendar
+            vehicleId={id!}
+            startDate={startDate}
+            endDate={endDate}
+            onChange={(s, e) => { setStartDate(s); setEndDate(e); }}
           />
-          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">End date</label>
+
+          {startDate ? (
+            <p className="mt-2 text-xs text-muted">
+              {endDate ? `${startDate} → ${endDate}` : `${startDate} — now pick your return date`}
+            </p>
+          ) : null}
+
+          <label className="mb-1.5 mt-3.5 block text-xs font-bold uppercase tracking-wide text-muted">Pickup time</label>
           <input
-            type="date"
+            type="time"
             className="mb-4 h-[38px] w-full rounded-md border border-line bg-surface px-3"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            value={pickupTime}
+            onChange={(e) => setPickupTime(e.target.value)}
           />
 
           {pricing ? (

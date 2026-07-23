@@ -38,6 +38,7 @@ const BOOKING_STATUS_MAP: Record<string, { label: string; tone: PillProps['tone'
   cancelled_by_renter: { label: 'Cancelled by Renter', tone: 'muted' },
   cancelled_by_owner: { label: 'Cancelled by Owner', tone: 'bad' },
   cancelled_no_show: { label: 'Cancelled — No-Show', tone: 'bad' },
+  owner_no_show: { label: 'Owner No-Show — Under Review', tone: 'bad' },
 };
 
 export function BookingStatusPill({ status }: { status: string }) {

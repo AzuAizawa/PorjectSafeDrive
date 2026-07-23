@@ -1,18 +1,22 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Inbox, CalendarClock, History } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BookingStatusPill, RatingBadge } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
 import { RateBookingDialog } from '@/components/rate-booking-dialog';
 import { EmergencyBanner } from '@/components/emergency-banner';
 import { BookingChat } from '@/components/booking-chat';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { fetchRatingSummaries } from '@/lib/ratings';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
+import { formatTime, pickupTimestamp, useNoShowGraceMinutes } from '@/lib/pickup';
+import { isHistoryStatus } from '@/lib/booking-status';
 import type { Booking, CarModel, CarBrand, Profile } from '@/lib/database.types';
 
 type BookingRow = Booking & {
@@ -46,6 +50,7 @@ export function BookingsReceivedPage() {
   const noShowDialog = useConfirmTarget<string>();
   const rateDialog = useConfirmTarget<string>();
   const [chatOpenId, setChatOpenId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'active' | 'history'>('active');
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings', 'received', profile?.id],
@@ -63,6 +68,7 @@ export function BookingsReceivedPage() {
     queryFn: () => fetchRatingSummaries(renterIds),
     enabled: renterIds.length > 0,
   });
+  const { data: graceMinutes } = useNoShowGraceMinutes();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const invalidate = () => {
@@ -112,6 +118,9 @@ export function BookingsReceivedPage() {
   if (isLoading) return <p className="text-muted">Loading…</p>;
 
   const rateTargetBooking = bookings?.find((b) => b.id === rateDialog.target);
+  const visibleBookings = bookings?.filter((b) => (tab === 'history' ? isHistoryStatus(b.status) : !isHistoryStatus(b.status)));
+  const historyCount = bookings?.filter((b) => isHistoryStatus(b.status)).length ?? 0;
+  const activeCount = bookings ? bookings.length - historyCount : 0;
 
   return (
     <div>
@@ -126,8 +135,23 @@ export function BookingsReceivedPage() {
         <p className="mb-4 rounded-md border border-bad bg-bad-soft p-3 text-sm text-bad">{actionError}</p>
       ) : null}
 
+      <div className="mb-4 flex gap-1 border-b border-line">
+        {(['active', 'history'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={cn(
+              '-mb-px border-b-2 px-3 py-2 text-sm font-semibold',
+              tab === t ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-ink'
+            )}
+          >
+            {t === 'active' ? `Active (${activeCount})` : `History (${historyCount})`}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-col gap-3.5">
-        {bookings?.map((b) => (
+        {visibleBookings?.map((b) => (
           <Card key={b.id} className="p-5">
             <div className="flex items-start justify-between">
               <div className="flex gap-3">
@@ -143,7 +167,7 @@ export function BookingsReceivedPage() {
                   </div>
                   <div className="text-xs text-muted">
                     {b.vehicle.model.brand.name} {b.vehicle.model.name} · {b.vehicle.plate_number} ·{' '}
-                    {formatDate(b.start_date)}–{formatDate(b.end_date)}
+                    {formatDate(b.start_date)}–{formatDate(b.end_date)} · Pickup {formatTime(b.pickup_time)}
                   </div>
                 </div>
               </div>
@@ -168,21 +192,31 @@ export function BookingsReceivedPage() {
                   <Button variant="danger" size="sm" onClick={() => declineDialog.open(b.id)}>Decline</Button>
                 </>
               ) : null}
-              {b.status === 'downpayment_paid' ? (
-                <>
-                  <Button size="sm" disabled title="Balance must be paid before handover can be confirmed">
-                    Confirm Handover
-                  </Button>
-                  <Button variant="danger" size="sm" onClick={() => noShowDialog.open(b.id)}>
-                    Cancel — Unpaid at Meetup
-                  </Button>
-                </>
-              ) : null}
-              {b.status === 'fully_paid' ? (
-                <Button size="sm" onClick={() => confirmHandover.mutate(b.id)}>Confirm Handover</Button>
-              ) : null}
+              {b.status === 'downpayment_paid' || b.status === 'fully_paid' ? (() => {
+                const graceOver = graceMinutes != null && Date.now() >= pickupTimestamp(b.start_date, b.pickup_time) + graceMinutes * 60_000;
+                return (
+                  <>
+                    {b.status === 'fully_paid' ? (
+                      <Button size="sm" onClick={() => confirmHandover.mutate(b.id)}>Confirm Handover</Button>
+                    ) : (
+                      <Button size="sm" disabled title="Balance must be paid before handover can be confirmed">
+                        Confirm Handover
+                      </Button>
+                    )}
+                    {graceOver ? (
+                      <Button variant="danger" size="sm" onClick={() => noShowDialog.open(b.id)}>
+                        Mark No-Show
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted">
+                        Renter can still show up until {formatTime(b.pickup_time)} + grace period
+                      </span>
+                    )}
+                  </>
+                );
+              })() : null}
               {b.status === 'active' ? (
-                <Button size="sm" onClick={() => markComplete.mutate(b.id)}>Mark Complete</Button>
+                <Button size="sm" onClick={() => markComplete.mutate(b.id)}>Confirm Return</Button>
               ) : null}
               {b.status === 'completed' ? (
                 reviewedIds?.has(b.id) ? (
@@ -201,7 +235,14 @@ export function BookingsReceivedPage() {
           </Card>
         ))}
 
-        {bookings?.length === 0 ? <p className="py-16 text-center text-muted">No booking requests yet.</p> : null}
+        {bookings?.length === 0 ? (
+          <EmptyState icon={Inbox} title="No booking requests yet" description="Requests from renters will show up here." />
+        ) : visibleBookings?.length === 0 ? (
+          <EmptyState
+            icon={tab === 'history' ? History : CalendarClock}
+            title={tab === 'history' ? "You don't have any past bookings yet" : 'Nothing active right now'}
+          />
+        ) : null}
       </div>
 
       <ConfirmDialog
@@ -220,9 +261,9 @@ export function BookingsReceivedPage() {
 
       <ConfirmDialog
         open={!!noShowDialog.target}
-        title="Cancel this booking?"
-        description="The renter didn't pay the balance before the meetup — they'll forfeit part of the downpayment as a cancellation fee and receive a strike."
-        confirmLabel="Cancel Booking"
+        title="Mark this renter as a no-show?"
+        description="Only confirm this if the renter never showed up (or never finished paying) within the grace period after the scheduled pickup time. They'll forfeit part of what they've paid as a cancellation fee and receive a strike."
+        confirmLabel="Confirm No-Show"
         confirmVariant="danger"
         pending={cancelNoShow.isPending}
         onConfirm={() => noShowDialog.target && cancelNoShow.mutate(noShowDialog.target)}

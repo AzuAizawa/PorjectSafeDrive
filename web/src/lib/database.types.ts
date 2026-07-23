@@ -12,7 +12,7 @@ export type BookingStatus =
   | 'pending_owner' | 'owner_rejected' | 'expired'
   | 'pending_payment' | 'downpayment_paid' | 'fully_paid'
   | 'active' | 'completed'
-  | 'cancelled_by_renter' | 'cancelled_by_owner' | 'cancelled_no_show';
+  | 'cancelled_by_renter' | 'cancelled_by_owner' | 'cancelled_no_show' | 'owner_no_show';
 export type PaymentType = 'downpayment' | 'balance' | 'deposit' | 'payout' | 'refund' | 'subscription';
 export type PaymentStatus = 'pending' | 'succeeded' | 'failed';
 export type DisputeStatus = 'open' | 'resolved';
@@ -119,6 +119,7 @@ export interface Booking {
   owner_id: string;
   start_date: string;
   end_date: string;
+  pickup_time: string;
   total_days: number;
   base_price: number;
   commission: number;
@@ -139,8 +140,18 @@ export interface Booking {
   payment_deadline: string | null;
   renter_completed: boolean;
   owner_completed: boolean;
+  completed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface VehicleBlockedDate {
+  id: string;
+  vehicle_id: string;
+  start_date: string;
+  end_date: string;
+  reason: string | null;
+  created_at: string;
 }
 
 export interface Payment {
