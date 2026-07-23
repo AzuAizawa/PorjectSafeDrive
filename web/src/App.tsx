@@ -18,6 +18,7 @@ import { AdminCatalogPage } from '@/routes/admin/catalog';
 import { AdminDisputesPage } from '@/routes/admin/disputes';
 import { AdminPaymentsPage } from '@/routes/admin/payments';
 import { AdminAuditPage } from '@/routes/admin/audit';
+import { AdminSecurityLogPage } from '@/routes/admin/security-log';
 import { AdminSettingsPage } from '@/routes/admin/settings';
 import { AdminDashboardPage } from '@/routes/admin/dashboard';
 import { AdminAnalyticsPage } from '@/routes/admin/analytics';
@@ -87,6 +88,7 @@ export default function App() {
         <Route path="admin/catalog" element={<RequireFullAdmin><AdminCatalogPage /></RequireFullAdmin>} />
         <Route path="admin/payments" element={<RequireFullAdmin><AdminPaymentsPage /></RequireFullAdmin>} />
         <Route path="admin/audit" element={<RequireFullAdmin><AdminAuditPage /></RequireFullAdmin>} />
+        <Route path="admin/security-log" element={<RequireFullAdmin><AdminSecurityLogPage /></RequireFullAdmin>} />
         <Route path="admin/settings" element={<RequireFullAdmin><AdminSettingsPage /></RequireFullAdmin>} />
         <Route path="admin/company-info" element={<RequireFullAdmin><AdminCompanyInfoPage /></RequireFullAdmin>} />
       </Route>

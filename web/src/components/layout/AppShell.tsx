@@ -32,6 +32,7 @@ const adminNav = [
   { to: '/admin/catalog', label: 'Car Catalog', fullAdminOnly: true },
   { to: '/admin/payments', label: 'Send Payments', fullAdminOnly: true },
   { to: '/admin/audit', label: 'Audit Trail', fullAdminOnly: true },
+  { to: '/admin/security-log', label: 'Security Log', fullAdminOnly: true },
   { to: '/admin/settings', label: 'Settings', fullAdminOnly: true },
   { to: '/admin/company-info', label: 'Company Info', fullAdminOnly: true },
 ];
