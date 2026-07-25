@@ -63,7 +63,14 @@ async function fetchCatalog() {
   return { brands: brands as CarBrand[], models: models as CarModel[] };
 }
 
+function addDays(iso: string, days: number) {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export function BrowsePage() {
+  const todayIso = new Date().toISOString().slice(0, 10);
   const [search, setSearch] = useState('');
   const [bodyTypes, setBodyTypes] = useState<string[]>([]);
   const [brandIds, setBrandIds] = useState<string[]>([]);
@@ -119,7 +126,7 @@ export function BrowsePage() {
       </div>
 
       <Card className="mb-4.5 p-5">
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-end gap-2.5">
           <input
             className="input-base min-w-[200px] flex-1"
             placeholder="Search brand or model…"
@@ -130,23 +137,40 @@ export function BrowsePage() {
           <MultiSelectDropdown label="Brand" options={brandOptions} selected={brandIds} onChange={setBrandIds} />
           <MultiSelectDropdown label="Model" options={modelOptions} selected={modelIds} onChange={setModelIds} />
           <MultiSelectDropdown label="City" options={[...CITY_OPTIONS]} selected={cities} onChange={setCities} />
-          <input
-            type="date"
-            className="input-base w-[150px]"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
-          <input
-            type="date"
-            className="input-base w-[150px]"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-          />
-          <Button
-            variant="secondary"
-            disabled={!startDate || !endDate}
-            onClick={() => setQueryDates({ start: startDate, end: endDate })}
-          >
+          <div className="flex flex-col gap-1">
+            <label htmlFor="browse-start-date" className="text-[10.5px] font-bold uppercase tracking-wide text-muted">
+              Start date
+            </label>
+            <input
+              id="browse-start-date"
+              type="date"
+              className="input-base w-[150px]"
+              min={todayIso}
+              value={startDate}
+              onChange={(e) => {
+                const v = e.target.value;
+                setStartDate(v);
+                // Keep the end date valid — if it's no longer strictly after
+                // the new start date, clear it rather than leaving a
+                // before-start value sitting in the field.
+                if (endDate && endDate <= v) setEndDate('');
+              }}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="browse-end-date" className="text-[10.5px] font-bold uppercase tracking-wide text-muted">
+              End date
+            </label>
+            <input
+              id="browse-end-date"
+              type="date"
+              className="input-base w-[150px]"
+              min={startDate ? addDays(startDate, 1) : todayIso}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+          <Button variant="secondary" onClick={() => setQueryDates({ start: startDate, end: endDate })}>
             Check availability
           </Button>
         </div>
