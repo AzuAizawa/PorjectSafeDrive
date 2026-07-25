@@ -28,6 +28,25 @@ export function LoginPage() {
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [usingRecoveryCode, setUsingRecoveryCode] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [recoverySubmitting, setRecoverySubmitting] = useState(false);
+
+  async function handleRecoveryCodeSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setRecoverySubmitting(true);
+    const { error: fnError } = await supabase.functions.invoke('verify-recovery-code', { body: { code: recoveryCode } });
+    setRecoverySubmitting(false);
+    if (fnError) { setError('Invalid or already-used recovery code.'); return; }
+    // The lost factor was deleted server-side — nothing forces aal2 for a
+    // regular (non-staff) user, so just proceed in; they can re-enroll from
+    // Profile whenever they're ready.
+    void supabase.rpc('record_login_event').then(({ error }) => {
+      if (error) console.warn('record_login_event failed:', error);
+    });
+    navigate('/');
+  }
 
   async function handleMfaSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -180,7 +199,29 @@ export function LoginPage() {
           SafeDrive
         </div>
 
-        {mfaFactorId ? (
+        {mfaFactorId && usingRecoveryCode ? (
+          <form onSubmit={handleRecoveryCodeSubmit} className="flex flex-col gap-3.5">
+            <p className="text-sm text-muted">Enter a backup code. This resets your 2FA — you can set up a new authenticator afterward from your Profile.</p>
+            <input
+              className="h-[38px] w-full rounded-md border border-line bg-surface px-3 uppercase"
+              placeholder="XXXXX-XXXXX"
+              autoFocus
+              value={recoveryCode}
+              onChange={(e) => setRecoveryCode(e.target.value)}
+            />
+            {error ? <p className="text-sm text-bad">{error}</p> : null}
+            <Button type="submit" block disabled={!recoveryCode || recoverySubmitting}>
+              {recoverySubmitting ? 'Checking…' : 'Use Backup Code'}
+            </Button>
+            <button
+              type="button"
+              className="text-xs font-semibold text-muted hover:text-ink"
+              onClick={() => { setUsingRecoveryCode(false); setError(null); }}
+            >
+              ← Back to authenticator code
+            </button>
+          </form>
+        ) : mfaFactorId ? (
           <form onSubmit={handleMfaSubmit} className="flex flex-col gap-3.5">
             <p className="text-sm text-muted">Enter the 6-digit code from your authenticator app.</p>
             <input
@@ -194,6 +235,13 @@ export function LoginPage() {
             <Button type="submit" block disabled={mfaCode.length !== 6 || submitting}>
               {submitting ? 'Verifying…' : 'Verify'}
             </Button>
+            <button
+              type="button"
+              className="text-xs font-semibold text-muted hover:text-ink"
+              onClick={() => { setUsingRecoveryCode(true); setError(null); }}
+            >
+              Lost your authenticator? Use a backup code
+            </button>
           </form>
         ) : signupSent ? (
           <div>

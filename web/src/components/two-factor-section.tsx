@@ -61,6 +61,17 @@ export function TwoFactorSection() {
     onError: (e: Error) => setError(e.message),
   });
 
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const generateCodes = useMutation({
+    mutationFn: async () => {
+      const { data, error: genError } = await supabase.rpc('generate_mfa_recovery_codes');
+      if (genError) throw genError;
+      return data as string[];
+    },
+    onSuccess: (codes) => setRecoveryCodes(codes),
+    onError: (e: Error) => setError(e.message),
+  });
+
   const hasVerifiedFactor = (verifiedFactors?.length ?? 0) > 0;
 
   return (
@@ -72,19 +83,46 @@ export function TwoFactorSection() {
       </p>
 
       {hasVerifiedFactor ? (
-        <div className="flex items-center justify-between rounded-md bg-good-soft p-3 text-sm text-good">
-          <span>✓ Two-factor authentication is enabled.</span>
-          {isStaff ? null : (
-            <Button
-              size="sm"
-              variant="danger"
-              disabled={unenroll.isPending}
-              onClick={() => unenroll.mutate(verifiedFactors![0].id)}
-            >
-              Disable
-            </Button>
-          )}
-        </div>
+        <>
+          <div className="flex items-center justify-between rounded-md bg-good-soft p-3 text-sm text-good">
+            <span>✓ Two-factor authentication is enabled.</span>
+            {isStaff ? null : (
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={unenroll.isPending}
+                onClick={() => unenroll.mutate(verifiedFactors![0].id)}
+              >
+                Disable
+              </Button>
+            )}
+          </div>
+
+          <div className="mt-4 border-t border-line pt-4">
+            <h4 className="mb-1 text-xs font-bold uppercase tracking-wide text-muted">Backup Codes</h4>
+            <p className="mb-2 text-xs text-muted">
+              Lost your authenticator? A backup code lets you reset 2FA and enroll a new one. Generate a set now,
+              while you still have access — each code works once, and generating a new set invalidates any old ones.
+            </p>
+            {recoveryCodes ? (
+              <div className="rounded-md border border-warn bg-warn-soft p-3">
+                <p className="mb-2 text-xs font-bold text-warn">
+                  Save these somewhere safe now — they won't be shown again.
+                </p>
+                <div className="tabular grid grid-cols-2 gap-1.5 text-sm font-semibold">
+                  {recoveryCodes.map((c) => <span key={c}>{c}</span>)}
+                </div>
+                <Button size="sm" variant="secondary" className="mt-3" onClick={() => setRecoveryCodes(null)}>
+                  Done
+                </Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="secondary" disabled={generateCodes.isPending} onClick={() => generateCodes.mutate()}>
+                {generateCodes.isPending ? 'Generating…' : 'Generate Backup Codes'}
+              </Button>
+            )}
+          </div>
+        </>
       ) : enrolling ? (
         <div>
           {/* Supabase-generated SVG, not user input — safe to inject directly */}

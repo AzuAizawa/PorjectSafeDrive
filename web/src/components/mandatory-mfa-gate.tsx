@@ -30,6 +30,8 @@ export function MandatoryMfaGate({ children }: { children: ReactNode }) {
   const [enrolling, setEnrolling] = useState<{ factorId: string; qrCode: string; secret: string } | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [usingRecoveryCode, setUsingRecoveryCode] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState('');
 
   const { data: status, isLoading } = useQuery({ queryKey: ['mfa-status'], queryFn: fetchMfaStatus });
 
@@ -74,6 +76,21 @@ export function MandatoryMfaGate({ children }: { children: ReactNode }) {
     onError: (e) => setError(friendlyErrorMessage(e)),
   });
 
+  const useRecoveryCode = useMutation({
+    mutationFn: async () => {
+      const { error: fnError } = await supabase.functions.invoke('verify-recovery-code', { body: { code: recoveryCode } });
+      if (fnError) throw fnError;
+    },
+    onSuccess: () => {
+      // Factor was deleted server-side — refetch flips us to the
+      // enrollment screen, same as a brand-new staff account sees.
+      setRecoveryCode('');
+      setUsingRecoveryCode(false);
+      queryClient.invalidateQueries({ queryKey: ['mfa-status'] });
+    },
+    onError: (e) => setError(friendlyErrorMessage(e)),
+  });
+
   if (isLoading) return <p className="p-8 text-muted">Loading…</p>;
   if (status?.isAal2) return <>{children}</>;
 
@@ -86,7 +103,32 @@ export function MandatoryMfaGate({ children }: { children: ReactNode }) {
           your account has staff access.
         </p>
 
-        {status?.verifiedFactor && !enrolling ? (
+        {status?.verifiedFactor && !enrolling && usingRecoveryCode ? (
+          <div className="flex flex-col gap-3">
+            <label className="text-xs font-bold uppercase tracking-wide text-muted">Enter a backup code</label>
+            <input
+              className="input-base uppercase"
+              placeholder="XXXXX-XXXXX"
+              autoFocus
+              value={recoveryCode}
+              onChange={(e) => setRecoveryCode(e.target.value)}
+            />
+            {error ? <p className="text-sm text-bad">{error}</p> : null}
+            <Button disabled={!recoveryCode || useRecoveryCode.isPending} onClick={() => useRecoveryCode.mutate()}>
+              {useRecoveryCode.isPending ? 'Checking…' : 'Use Backup Code'}
+            </Button>
+            <p className="text-xs text-muted">
+              This resets your 2FA — you'll set up a new authenticator right after.
+            </p>
+            <button
+              type="button"
+              className="text-xs font-semibold text-muted hover:text-ink"
+              onClick={() => { setUsingRecoveryCode(false); setError(null); }}
+            >
+              ← Back to authenticator code
+            </button>
+          </div>
+        ) : status?.verifiedFactor && !enrolling ? (
           <div className="flex flex-col gap-3">
             <label className="text-xs font-bold uppercase tracking-wide text-muted">
               Enter the 6-digit code from your authenticator app
@@ -102,6 +144,13 @@ export function MandatoryMfaGate({ children }: { children: ReactNode }) {
             <Button disabled={code.length !== 6 || challenge.isPending} onClick={() => challenge.mutate()}>
               {challenge.isPending ? 'Verifying…' : 'Verify'}
             </Button>
+            <button
+              type="button"
+              className="text-xs font-semibold text-muted hover:text-ink"
+              onClick={() => { setUsingRecoveryCode(true); setError(null); }}
+            >
+              Lost your authenticator? Use a backup code
+            </button>
           </div>
         ) : enrolling ? (
           <div className="flex flex-col gap-3">
