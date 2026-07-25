@@ -237,7 +237,12 @@ export function AdminUsersPage() {
           <Card className="sticky top-[76px] p-5">
             <div className="mb-3 flex items-center gap-2.5">
               <Avatar avatarPath={selected.avatar_url} firstName={selected.first_name} lastName={selected.last_name} />
-              <h3 className="text-sm font-bold">{selected.first_name} {selected.last_name}</h3>
+              <div>
+                <h3 className="text-sm font-bold">
+                  {selected.first_name || selected.last_name ? `${selected.first_name ?? ''} ${selected.last_name ?? ''}` : 'Name not yet on file'}
+                </h3>
+                <p className="text-xs text-muted">{selected.email}</p>
+              </div>
             </div>
 
             {selected.verified_status === 'pending' && submission ? (

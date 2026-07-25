@@ -94,19 +94,27 @@ export function VerifyPage() {
       paths.selfie_face = verificationImagePath(profile!.id, 'selfie_face', selfieFace);
       await uploadFile('user-verification', paths.selfie_face, selfieFace);
 
-      const { error: insertError } = await supabase.from('verification_submissions').insert({
-        profile_id: profile!.id,
-        ...values,
-        license_front_path: paths.license_front,
-        license_back_path: paths.license_back,
-        secondary_id_front_path: paths.secondary_id_front,
-        secondary_id_back_path: paths.secondary_id_back,
-        selfie_with_id_path: paths.selfie_with_id,
-        selfie_face_path: paths.selfie_face,
+      // Single RPC (not a raw insert + a separate profiles update) — the
+      // profiles update alone would silently no-op, since
+      // protect_profile_fields() reverts verified_status for any non-admin
+      // UPDATE unless the RPC explicitly bypasses it server-side.
+      const { error: submitError } = await supabase.rpc('submit_verification', {
+        p_first_name: values.first_name,
+        p_middle_name: values.middle_name || null,
+        p_last_name: values.last_name,
+        p_phone: values.phone,
+        p_address: values.address,
+        p_birthday: values.birthday,
+        p_driver_license_number: values.driver_license_number,
+        p_secondary_id_type: values.secondary_id_type,
+        p_license_front_path: paths.license_front,
+        p_license_back_path: paths.license_back,
+        p_secondary_id_front_path: paths.secondary_id_front,
+        p_secondary_id_back_path: paths.secondary_id_back,
+        p_selfie_with_id_path: paths.selfie_with_id,
+        p_selfie_face_path: paths.selfie_face,
       });
-      if (insertError) throw insertError;
-
-      await supabase.from('profiles').update({ verified_status: 'pending' }).eq('id', profile!.id);
+      if (submitError) throw submitError;
     },
     onSuccess: async () => {
       await refreshProfile();
