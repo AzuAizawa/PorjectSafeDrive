@@ -30,6 +30,7 @@ const schema = z.object({
   pickup_location: z.string().min(1, 'Required').max(200),
   additional_info: z.string().max(1000).optional(),
   owner_contact_number: z.string().min(7, 'Enter a valid phone number').max(15),
+  orcr_expiry_date: z.string().min(1, 'Required — the OR/CR renewal date'),
   requires_deposit: z.boolean(),
   deposit_amount: z.coerce.number().nonnegative().optional(),
 });
@@ -110,6 +111,7 @@ export function AddVehiclePage() {
         pickup_location: values.pickup_location,
         additional_info: values.additional_info || null,
         owner_contact_number: values.owner_contact_number,
+        orcr_expiry_date: values.orcr_expiry_date,
         requires_deposit: values.requires_deposit,
         deposit_amount: values.requires_deposit ? values.deposit_amount : null,
       });
@@ -209,6 +211,9 @@ export function AddVehiclePage() {
             </Field>
             <Field label="Owner contact number" error={errors.owner_contact_number}>
               <input className="input-base" maxLength={15} placeholder="+63 9XX XXX XXXX" {...register('owner_contact_number')} />
+            </Field>
+            <Field label="OR/CR registration expiry" error={errors.orcr_expiry_date}>
+              <input type="date" className="input-base" {...register('orcr_expiry_date')} />
             </Field>
           </div>
 

@@ -30,6 +30,7 @@ const schema = z.object({
   pickup_location: z.string().min(1, 'Required').max(200),
   additional_info: z.string().max(1000).optional(),
   owner_contact_number: z.string().min(7, 'Enter a valid phone number').max(15),
+  orcr_expiry_date: z.string().min(1, 'Required — the OR/CR renewal date'),
   requires_deposit: z.boolean(),
   deposit_amount: z.coerce.number().nonnegative().optional(),
   listing_status: z.enum(['active', 'paused_by_owner']),
@@ -62,7 +63,7 @@ async function fetchBlockedDates(vehicleId: string) {
   return data as VehicleBlockedDate[];
 }
 
-const SENSITIVE_FIELDS = ['plate_number', 'model_id', 'model_year'] as const;
+const SENSITIVE_FIELDS = ['plate_number', 'model_id', 'model_year', 'orcr_expiry_date'] as const;
 
 export function EditVehiclePage() {
   const { id } = useParams<{ id: string }>();
@@ -98,6 +99,7 @@ export function EditVehiclePage() {
           pickup_location: data.vehicle.pickup_location,
           additional_info: data.vehicle.additional_info ?? '',
           owner_contact_number: data.vehicle.owner_contact_number,
+          orcr_expiry_date: data.vehicle.orcr_expiry_date ?? '',
           requires_deposit: data.vehicle.requires_deposit,
           deposit_amount: data.vehicle.deposit_amount ?? undefined,
           listing_status: data.vehicle.listing_status === 'paused_over_quota' ? 'paused_by_owner' : data.vehicle.listing_status,
@@ -160,6 +162,7 @@ export function EditVehiclePage() {
           pickup_location: values.pickup_location,
           additional_info: values.additional_info || null,
           owner_contact_number: values.owner_contact_number,
+          orcr_expiry_date: values.orcr_expiry_date,
           requires_deposit: values.requires_deposit,
           deposit_amount: values.requires_deposit ? values.deposit_amount : null,
           listing_status: values.listing_status,
@@ -210,8 +213,8 @@ export function EditVehiclePage() {
         <form onSubmit={handleSubmit((v) => submit.mutate(schema.parse(v)))} className="flex flex-col gap-4">
           {touchesSensitiveField ? (
             <p className="rounded-md border border-warn bg-warn-soft p-3 text-xs text-warn">
-              Changing the plate number, model, or ORCR sends this vehicle back to admin for re-approval. It stays
-              visible with its current details until that's done.
+              Changing the plate number, model, ORCR, or registration expiry sends this vehicle back to admin for
+              re-approval. It stays visible with its current details until that's done.
             </p>
           ) : null}
 
@@ -250,6 +253,9 @@ export function EditVehiclePage() {
             </Field>
             <Field label="Owner contact number" error={errors.owner_contact_number}>
               <input className="input-base" maxLength={15} {...register('owner_contact_number')} />
+            </Field>
+            <Field label="OR/CR registration expiry" error={errors.orcr_expiry_date}>
+              <input type="date" className="input-base" {...register('orcr_expiry_date')} />
             </Field>
             <Field label="Listing status">
               <select className="input-base" {...register('listing_status')}>

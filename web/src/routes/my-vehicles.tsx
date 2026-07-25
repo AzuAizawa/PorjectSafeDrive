@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ListerAnalyticsTab } from '@/components/lister-analytics-tab';
 import { cn, formatCurrency } from '@/lib/utils';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
+import { orcrExpiryStatus } from '@/lib/vehicle-expiry';
 import type { CarBrand, CarModel, Vehicle } from '@/lib/database.types';
 
 type VehicleRow = Vehicle & { model: CarModel & { brand: CarBrand } };
@@ -165,7 +166,12 @@ export function MyVehiclesPage() {
                     <td className="tabular px-4 py-3">{v.plate_number}</td>
                     <td className="tabular px-4 py-3">{formatCurrency(v.daily_price)}</td>
                     <td className="px-4 py-3">
-                      {statusPill(v)}
+                      <div className="flex flex-wrap gap-1.5">
+                        {statusPill(v)}
+                        {orcrExpiryStatus(v.orcr_expiry_date).tone === 'warn' || orcrExpiryStatus(v.orcr_expiry_date).tone === 'bad' ? (
+                          <Pill tone={orcrExpiryStatus(v.orcr_expiry_date).tone}>{orcrExpiryStatus(v.orcr_expiry_date).label}</Pill>
+                        ) : null}
+                      </div>
                       {v.approval_status === 'rejected' && v.rejection_reason ? (
                         <p className="mt-1 max-w-[220px] text-xs text-muted">{v.rejection_reason}</p>
                       ) : null}
