@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BookingStatusPill, Pill, RatingBadge } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
+import { ContactInfoButton } from '@/components/contact-info-button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
 import { RateBookingDialog } from '@/components/rate-booking-dialog';
@@ -16,21 +17,26 @@ import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { fetchRatingSummaries } from '@/lib/ratings';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 import { formatTime, pickupTimestamp, useNoShowGraceMinutes } from '@/lib/pickup';
-import { isHistoryStatus } from '@/lib/booking-status';
+import { isHistoryStatus, isBookingAccepted } from '@/lib/booking-status';
 import { PAYMENT_TYPE_LABEL, paymentStatusLabel, paymentStatusTone } from '@/lib/payment-display';
 import type { Booking, CarModel, CarBrand, Profile, Payment, Dispute } from '@/lib/database.types';
 
 type BookingRow = Booking & {
   vehicle: { plate_number: string; model: CarModel & { brand: CarBrand } };
-  renter: Pick<Profile, 'first_name' | 'last_name' | 'phone' | 'address' | 'birthday' | 'verified_status' | 'avatar_url'>;
+  renter: Pick<Profile, 'first_name' | 'last_name' | 'verified_status' | 'avatar_url'>;
 };
 
+// Deliberately not selecting phone/address/birthday here — those are only
+// shared once the owner accepts, and only name+phone, via
+// get_booking_counterpart_contact() (057_booking_counterpart_contact.sql).
+// This used to select all three unconditionally on every request
+// regardless of status, which was a real over-exposure this fixes.
 async function fetchBookingsReceived(ownerId: string): Promise<BookingRow[]> {
   const { data, error } = await supabase
     .from('bookings')
     .select(
       `*, vehicle:vehicles(plate_number, model:car_models(*, brand:car_brands(*))),
-       renter:profiles!bookings_renter_id_fkey(first_name, last_name, phone, address, birthday, verified_status, avatar_url)`
+       renter:profiles!bookings_renter_id_fkey(first_name, last_name, verified_status, avatar_url)`
     )
     .eq('owner_id', ownerId)
     .order('created_at', { ascending: false });
@@ -204,15 +210,23 @@ export function BookingsReceivedPage() {
           <Card key={b.id} className="p-5">
             <div className="flex items-start justify-between">
               <div className="flex gap-3">
-                <Avatar avatarPath={b.renter.avatar_url} firstName={b.renter.first_name} lastName={b.renter.last_name} />
+                {isBookingAccepted(b.status) ? (
+                  <ContactInfoButton
+                    bookingId={b.id}
+                    avatarPath={b.renter.avatar_url}
+                    firstName={b.renter.first_name}
+                    lastName={b.renter.last_name}
+                  />
+                ) : (
+                  <Avatar avatarPath={b.renter.avatar_url} firstName={b.renter.first_name} lastName={b.renter.last_name} />
+                )}
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-[14.5px] font-bold">{b.renter.first_name} {b.renter.last_name}</span>
                     {renterRatings ? <RatingBadge {...(renterRatings.get(b.renter_id) ?? { avg: 0, count: 0 })} /> : null}
                   </div>
                   <div className="text-xs text-muted">
-                    {b.renter.verified_status === 'verified' ? 'Verified' : 'Not verified'} · Born{' '}
-                    {b.renter.birthday ? formatDate(b.renter.birthday) : '—'} · {b.renter.address}
+                    {b.renter.verified_status === 'verified' ? 'Verified' : 'Not verified'}
                   </div>
                   <div className="text-xs text-muted">
                     {b.vehicle.model.brand.name} {b.vehicle.model.name} · {b.vehicle.plate_number} ·{' '}

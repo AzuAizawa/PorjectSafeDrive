@@ -9,3 +9,12 @@ const HISTORY_STATUSES = new Set<BookingStatus>([
 export function isHistoryStatus(status: BookingStatus): boolean {
   return HISTORY_STATUSES.has(status);
 }
+
+// Contact info (name/phone) is only shared once the owner has actually
+// accepted — matches the server-side gate in
+// get_booking_counterpart_contact() (057_booking_counterpart_contact.sql).
+const NOT_YET_ACCEPTED_STATUSES = new Set<BookingStatus>(['pending_owner', 'owner_rejected', 'expired']);
+
+export function isBookingAccepted(status: BookingStatus): boolean {
+  return !NOT_YET_ACCEPTED_STATUSES.has(status);
+}

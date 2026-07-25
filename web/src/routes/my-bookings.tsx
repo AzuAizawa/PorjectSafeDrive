@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BookingStatusPill, Pill, RatingBadge } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
+import { ContactInfoButton } from '@/components/contact-info-button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
 import { ReportIssueDialog } from '@/components/report-issue-dialog';
@@ -20,7 +21,7 @@ import { signedUrl } from '@/lib/storage';
 import { fetchRatingSummaries } from '@/lib/ratings';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 import { formatTime, pickupTimestamp, useNoShowGraceMinutes } from '@/lib/pickup';
-import { isHistoryStatus } from '@/lib/booking-status';
+import { isHistoryStatus, isBookingAccepted } from '@/lib/booking-status';
 import { PAYMENT_TYPE_LABEL, paymentStatusLabel, paymentStatusTone } from '@/lib/payment-display';
 import type { Booking, CarModel, CarBrand, Profile, Payment, Dispute } from '@/lib/database.types';
 
@@ -238,7 +239,16 @@ export function MyBookingsPage() {
               })() : null}
 
               <div className="mt-2.5 flex items-center gap-2">
-                <Avatar avatarPath={b.owner.avatar_url} firstName={b.owner.first_name} lastName={b.owner.last_name} size="sm" />
+                {isBookingAccepted(b.status) ? (
+                  <ContactInfoButton
+                    bookingId={b.id}
+                    avatarPath={b.owner.avatar_url}
+                    firstName={b.owner.first_name}
+                    lastName={b.owner.last_name}
+                  />
+                ) : (
+                  <Avatar avatarPath={b.owner.avatar_url} firstName={b.owner.first_name} lastName={b.owner.last_name} size="sm" />
+                )}
                 <div className="text-[12.5px]">
                   <span className="text-muted">Owner</span> <strong>{b.owner.first_name} {b.owner.last_name}</strong>
                 </div>
