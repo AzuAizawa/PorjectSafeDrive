@@ -37,8 +37,12 @@ export function LoginPage() {
     setSubmitting(false);
     if (verifyError) { setError(verifyError.message); return; }
     // Fire-and-forget — Security Log entries are a nice-to-have, never a
-    // reason to delay or fail a real login.
-    void supabase.rpc('record_login_event');
+    // reason to delay or fail a real login. Still logged to the console on
+    // failure (not shown to the user) so a silent gap is at least
+    // discoverable in dev tools instead of leaving zero trace.
+    void supabase.rpc('record_login_event').then(({ error }) => {
+      if (error) console.warn('record_login_event failed:', error);
+    });
     // Land on "/" rather than a hardcoded destination — the index route
     // (LandingRedirect in App.tsx) sends staff and renters to different
     // homes based on role once the profile finishes loading.
@@ -115,8 +119,12 @@ export function LoginPage() {
       }
     }
     // Fire-and-forget — Security Log entries are a nice-to-have, never a
-    // reason to delay or fail a real login.
-    void supabase.rpc('record_login_event');
+    // reason to delay or fail a real login. Still logged to the console on
+    // failure (not shown to the user) so a silent gap is at least
+    // discoverable in dev tools instead of leaving zero trace.
+    void supabase.rpc('record_login_event').then(({ error }) => {
+      if (error) console.warn('record_login_event failed:', error);
+    });
     // Land on "/" rather than a hardcoded destination — the index route
     // (LandingRedirect in App.tsx) sends staff and renters to different
     // homes based on role once the profile finishes loading.
