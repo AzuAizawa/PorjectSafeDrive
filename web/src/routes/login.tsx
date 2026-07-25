@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Car, ShieldCheck, IdCard, CreditCard } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -28,6 +29,9 @@ export function LoginPage() {
     const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId: mfaFactorId!, code: mfaCode });
     setSubmitting(false);
     if (verifyError) { setError(verifyError.message); return; }
+    // Fire-and-forget — Security Log entries are a nice-to-have, never a
+    // reason to delay or fail a real login.
+    void supabase.rpc('record_login_event');
     // Land on "/" rather than a hardcoded destination — the index route
     // (LandingRedirect in App.tsx) sends staff and renters to different
     // homes based on role once the profile finishes loading.
@@ -93,6 +97,9 @@ export function LoginPage() {
         return;
       }
     }
+    // Fire-and-forget — Security Log entries are a nice-to-have, never a
+    // reason to delay or fail a real login.
+    void supabase.rpc('record_login_event');
     // Land on "/" rather than a hardcoded destination — the index route
     // (LandingRedirect in App.tsx) sends staff and renters to different
     // homes based on role once the profile finishes loading.
@@ -102,9 +109,48 @@ export function LoginPage() {
   const done = signupSent || resetSent;
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-5">
+    <div className="grid min-h-screen grid-cols-[1fr_1fr] max-[900px]:grid-cols-1">
+      <div className="btn-gradient-accent relative hidden flex-col justify-between overflow-hidden p-11 text-white min-[900px]:flex">
+        <div
+          className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute -bottom-28 -left-16 h-80 w-80 rounded-full bg-black/10 blur-3xl"
+          aria-hidden
+        />
+
+        <div className="relative flex items-center gap-2.5 text-lg font-bold">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/15 text-sm">SD</span>
+          SafeDrive
+        </div>
+
+        <div className="relative">
+          <Car className="mb-5 h-11 w-11 opacity-90" strokeWidth={1.5} aria-hidden />
+          <h2 className="mb-3 text-[32px] font-bold leading-tight">
+            Rent smarter,<br />drive further.
+          </h2>
+          <p className="max-w-[38ch] text-[15px] text-white/80">
+            Peer-to-peer car rental built on verified identities and secure payments.
+          </p>
+        </div>
+
+        <div className="relative flex flex-col gap-3 text-sm text-white/90">
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden /> Verified owners &amp; renters
+          </div>
+          <div className="flex items-center gap-2.5">
+            <IdCard className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden /> Government ID verification
+          </div>
+          <div className="flex items-center gap-2.5">
+            <CreditCard className="h-4 w-4 shrink-0" strokeWidth={2.25} aria-hidden /> Secure PayMongo payments
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center px-5 py-10">
       <Card className="w-full max-w-sm p-6 shadow-2xl">
-        <div className="mb-5 flex items-center gap-2.5 font-bold">
+        <div className="mb-5 flex items-center gap-2.5 font-bold min-[900px]:hidden">
           <span className="btn-gradient-accent grid h-6.5 w-6.5 place-items-center rounded-lg text-xs text-white shadow-[0_4px_12px_-4px_rgba(var(--shadow-tint),0.6)]">SD</span>
           SafeDrive
         </div>
@@ -209,6 +255,7 @@ export function LoginPage() {
           </button>
         ) : null}
       </Card>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabase';
 
 interface AuthActivityRow {
   occurred_at: string;
-  ip_address: string | null;
   action: string | null;
   actor_email: string | null;
   actor_name: string | null;
@@ -24,8 +23,9 @@ export function AdminSecurityLogPage() {
         <div className="mb-1.5 text-[11.5px] font-bold uppercase tracking-wide text-accent">Admin</div>
         <h1 className="text-2xl">Security Log</h1>
         <p className="mt-1.5 text-muted">
-          Login activity from Supabase Auth — who signed in, when, and from what IP. Distinct from the Audit Trail,
-          which covers business actions rather than authentication events.
+          Successful sign-ins through SafeDrive's own login page — who signed in and when. Distinct from the Audit
+          Trail, which covers business actions rather than authentication events. Note: this only captures logins
+          made through this app; it won't show failed attempts or sign-ins via another client.
         </p>
       </div>
 
@@ -36,7 +36,6 @@ export function AdminSecurityLogPage() {
               <th className="px-4 py-3">Timestamp</th>
               <th className="px-4 py-3">User</th>
               <th className="px-4 py-3">Event</th>
-              <th className="px-4 py-3">IP address</th>
             </tr>
           </thead>
           <tbody>
@@ -45,7 +44,6 @@ export function AdminSecurityLogPage() {
                 <td className="tabular px-4 py-3">{new Date(e.occurred_at).toLocaleString()}</td>
                 <td className="px-4 py-3">{e.actor_name || e.actor_email || '—'}</td>
                 <td className="px-4 py-3">{e.action ?? '—'}</td>
-                <td className="tabular px-4 py-3 text-muted">{e.ip_address ?? '—'}</td>
               </tr>
             ))}
           </tbody>
