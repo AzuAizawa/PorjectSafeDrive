@@ -28,7 +28,10 @@ export function LoginPage() {
     const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId: mfaFactorId!, code: mfaCode });
     setSubmitting(false);
     if (verifyError) { setError(verifyError.message); return; }
-    navigate('/browse');
+    // Land on "/" rather than a hardcoded destination — the index route
+    // (LandingRedirect in App.tsx) sends staff and renters to different
+    // homes based on role once the profile finishes loading.
+    navigate('/');
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -90,7 +93,10 @@ export function LoginPage() {
         return;
       }
     }
-    navigate('/browse');
+    // Land on "/" rather than a hardcoded destination — the index route
+    // (LandingRedirect in App.tsx) sends staff and renters to different
+    // homes based on role once the profile finishes loading.
+    navigate('/');
   }
 
   const done = signupSent || resetSent;

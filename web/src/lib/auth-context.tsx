@@ -23,9 +23,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
-      if (data.session) void loadProfile(data.session.user.id);
+      // Awaited (not fire-and-forget) so `loading` only clears once `profile`
+      // — and therefore `role` — is actually known. Without this, AppShell
+      // briefly rendered with profile === null on every load, which reads as
+      // "not staff" and flashed the full renter UI (Switch to Lister, book/
+      // list nav) to admin/support/super_admin accounts before it corrected
+      // itself a moment later.
+      if (data.session) await loadProfile(data.session.user.id);
       setLoading(false);
     });
 

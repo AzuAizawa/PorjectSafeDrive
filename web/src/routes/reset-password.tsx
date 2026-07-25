@@ -42,7 +42,7 @@ export function ResetPasswordPage() {
         {done ? (
           <>
             <p className="mb-4 text-sm text-muted">Your password has been updated.</p>
-            <Button block onClick={() => navigate('/browse')}>Continue</Button>
+            <Button block onClick={() => navigate('/')}>Continue</Button>
           </>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">

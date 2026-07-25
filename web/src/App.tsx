@@ -26,6 +26,7 @@ import { InquirePage } from '@/routes/inquire';
 import { HelpPage } from '@/routes/help';
 import { AdminCompanyInfoPage } from '@/routes/admin/company-info';
 import { AdminInquiriesPage } from '@/routes/admin/inquiries';
+import { AdminRoleManagementPage } from '@/routes/admin/role-management';
 import { PrivacyPage } from '@/routes/privacy';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -35,19 +36,40 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Staff = admin or support — the lower-risk admin pages (dashboard, analytics,
-// users, vehicle approval, disputes, inquiries).
-function RequireStaff({ children }: { children: React.ReactNode }) {
+// Single source of truth for "where does this role land" — used both by the
+// index route and by every guard's redirect target, so they can never drift.
+function homeRouteFor(role: string | undefined) {
+  if (role === 'super_admin') return '/admin/role-management';
+  if (role === 'admin' || role === 'support') return '/admin';
+  return '/browse';
+}
+
+function LandingRedirect() {
   const { profile } = useAuth();
-  if (profile && !['admin', 'support'].includes(profile.role)) return <Navigate to="/browse" replace />;
+  if (!profile) return <p className="p-8 text-muted">Loading…</p>;
+  return <Navigate to={homeRouteFor(profile.role)} replace />;
+}
+
+// Generic role gate — pass the roles allowed to see this route. Every admin
+// page uses this now instead of separate Staff/FullAdmin components, so the
+// 3-tier model (support/admin/super_admin) can mix and match per page.
+function RequireRole({ roles, children }: { roles: string[]; children: React.ReactNode }) {
+  const { profile } = useAuth();
+  if (profile && !roles.includes(profile.role)) return <Navigate to={homeRouteFor(profile.role)} replace />;
   return <>{children}</>;
 }
 
-// Full admin only — settings, payouts/refunds, catalog, audit trail. Support
-// can't touch any of these, per the trust & safety brainstorm decision.
-function RequireFullAdmin({ children }: { children: React.ReactNode }) {
+// The inverse of RequireRole: blocks staff (admin/support/super_admin) from
+// the renter/lister marketplace entirely. Staff accounts must never book,
+// list, or rent a vehicle — by design, for the same reason a bank teller
+// doesn't use their own teller login to open a personal savings account.
+// Previously nothing enforced this: /browse, /cars/:id, etc. had zero role
+// check, so a staff account that landed here (every login did, via the
+// hardcoded /browse redirect) could fully use the marketplace.
+function RequireRenter({ children }: { children: React.ReactNode }) {
   const { profile } = useAuth();
-  if (profile && profile.role !== 'admin') return <Navigate to="/browse" replace />;
+  const isStaff = profile && ['admin', 'support', 'super_admin'].includes(profile.role);
+  if (isStaff) return <Navigate to={homeRouteFor(profile!.role)} replace />;
   return <>{children}</>;
 }
 
@@ -65,32 +87,33 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<Navigate to="/browse" replace />} />
-        <Route path="browse" element={<BrowsePage />} />
-        <Route path="cars/:id" element={<CarDetailPage />} />
-        <Route path="bookings" element={<MyBookingsPage />} />
-        <Route path="verify" element={<VerifyPage />} />
+        <Route index element={<LandingRedirect />} />
+        <Route path="browse" element={<RequireRenter><BrowsePage /></RequireRenter>} />
+        <Route path="cars/:id" element={<RequireRenter><CarDetailPage /></RequireRenter>} />
+        <Route path="bookings" element={<RequireRenter><MyBookingsPage /></RequireRenter>} />
+        <Route path="verify" element={<RequireRenter><VerifyPage /></RequireRenter>} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="inquire" element={<InquirePage />} />
         <Route path="help" element={<HelpPage />} />
 
-        <Route path="my-vehicles" element={<MyVehiclesPage />} />
-        <Route path="my-vehicles/new" element={<AddVehiclePage />} />
-        <Route path="my-vehicles/:id/edit" element={<EditVehiclePage />} />
-        <Route path="bookings-received" element={<BookingsReceivedPage />} />
+        <Route path="my-vehicles" element={<RequireRenter><MyVehiclesPage /></RequireRenter>} />
+        <Route path="my-vehicles/new" element={<RequireRenter><AddVehiclePage /></RequireRenter>} />
+        <Route path="my-vehicles/:id/edit" element={<RequireRenter><EditVehiclePage /></RequireRenter>} />
+        <Route path="bookings-received" element={<RequireRenter><BookingsReceivedPage /></RequireRenter>} />
 
-        <Route path="admin" element={<RequireStaff><AdminDashboardPage /></RequireStaff>} />
-        <Route path="admin/analytics" element={<RequireStaff><AdminAnalyticsPage /></RequireStaff>} />
-        <Route path="admin/users" element={<RequireStaff><AdminUsersPage /></RequireStaff>} />
-        <Route path="admin/vehicles" element={<RequireStaff><AdminVehiclesPage /></RequireStaff>} />
-        <Route path="admin/disputes" element={<RequireStaff><AdminDisputesPage /></RequireStaff>} />
-        <Route path="admin/inquiries" element={<RequireStaff><AdminInquiriesPage /></RequireStaff>} />
-        <Route path="admin/catalog" element={<RequireFullAdmin><AdminCatalogPage /></RequireFullAdmin>} />
-        <Route path="admin/payments" element={<RequireFullAdmin><AdminPaymentsPage /></RequireFullAdmin>} />
-        <Route path="admin/audit" element={<RequireFullAdmin><AdminAuditPage /></RequireFullAdmin>} />
-        <Route path="admin/security-log" element={<RequireFullAdmin><AdminSecurityLogPage /></RequireFullAdmin>} />
-        <Route path="admin/settings" element={<RequireFullAdmin><AdminSettingsPage /></RequireFullAdmin>} />
-        <Route path="admin/company-info" element={<RequireFullAdmin><AdminCompanyInfoPage /></RequireFullAdmin>} />
+        <Route path="admin" element={<RequireRole roles={['support', 'admin']}><AdminDashboardPage /></RequireRole>} />
+        <Route path="admin/analytics" element={<RequireRole roles={['support', 'admin']}><AdminAnalyticsPage /></RequireRole>} />
+        <Route path="admin/users" element={<RequireRole roles={['support', 'admin']}><AdminUsersPage /></RequireRole>} />
+        <Route path="admin/vehicles" element={<RequireRole roles={['support', 'admin']}><AdminVehiclesPage /></RequireRole>} />
+        <Route path="admin/disputes" element={<RequireRole roles={['support', 'admin']}><AdminDisputesPage /></RequireRole>} />
+        <Route path="admin/inquiries" element={<RequireRole roles={['support', 'admin']}><AdminInquiriesPage /></RequireRole>} />
+        <Route path="admin/catalog" element={<RequireRole roles={['admin']}><AdminCatalogPage /></RequireRole>} />
+        <Route path="admin/payments" element={<RequireRole roles={['admin']}><AdminPaymentsPage /></RequireRole>} />
+        <Route path="admin/audit" element={<RequireRole roles={['admin', 'super_admin']}><AdminAuditPage /></RequireRole>} />
+        <Route path="admin/security-log" element={<RequireRole roles={['admin', 'super_admin']}><AdminSecurityLogPage /></RequireRole>} />
+        <Route path="admin/settings" element={<RequireRole roles={['admin']}><AdminSettingsPage /></RequireRole>} />
+        <Route path="admin/company-info" element={<RequireRole roles={['admin']}><AdminCompanyInfoPage /></RequireRole>} />
+        <Route path="admin/role-management" element={<RequireRole roles={['super_admin']}><AdminRoleManagementPage /></RequireRole>} />
       </Route>
 
       <Route path="*" element={<Navigate to="/browse" replace />} />
