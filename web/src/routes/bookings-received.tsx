@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Inbox, CalendarClock, History } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookingStatusPill, RatingBadge } from '@/components/ui/pill';
+import { BookingStatusPill, Pill, RatingBadge } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
@@ -17,7 +17,8 @@ import { fetchRatingSummaries } from '@/lib/ratings';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 import { formatTime, pickupTimestamp, useNoShowGraceMinutes } from '@/lib/pickup';
 import { isHistoryStatus } from '@/lib/booking-status';
-import type { Booking, CarModel, CarBrand, Profile } from '@/lib/database.types';
+import { PAYMENT_TYPE_LABEL, paymentStatusLabel, paymentStatusTone } from '@/lib/payment-display';
+import type { Booking, CarModel, CarBrand, Profile, Payment, Dispute } from '@/lib/database.types';
 
 type BookingRow = Booking & {
   vehicle: { plate_number: string; model: CarModel & { brand: CarBrand } };
@@ -43,6 +44,28 @@ async function fetchMyReviewedBookingIds(reviewerId: string) {
   return new Set(data.map((r) => r.booking_id));
 }
 
+async function fetchDisputesForBookings(bookingIds: string[]) {
+  if (bookingIds.length === 0) return [];
+  const { data, error } = await supabase.from('disputes').select('*').in('booking_id', bookingIds);
+  if (error) throw error;
+  return data as Dispute[];
+}
+
+// payer_id on a 'payout' row is the owner, not a renter (003_functions.sql) —
+// so filtering payments by payer_id = this owner's id naturally returns only
+// their own payouts, nothing about the renter's downpayment/balance/deposit,
+// with no extra filtering needed. That's also the right privacy boundary:
+// an owner has no reason to see a renter's deposit/refund detail.
+async function fetchMyPayouts(ownerId: string) {
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*')
+    .eq('payer_id', ownerId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data as Payment[];
+}
+
 export function BookingsReceivedPage() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
@@ -50,6 +73,7 @@ export function BookingsReceivedPage() {
   const noShowDialog = useConfirmTarget<string>();
   const rateDialog = useConfirmTarget<string>();
   const [chatOpenId, setChatOpenId] = useState<string | null>(null);
+  const [payoutsOpenId, setPayoutsOpenId] = useState<string | null>(null);
   const [tab, setTab] = useState<'active' | 'history'>('active');
 
   const { data: bookings, isLoading } = useQuery({
@@ -57,6 +81,31 @@ export function BookingsReceivedPage() {
     queryFn: () => fetchBookingsReceived(profile!.id),
     enabled: !!profile,
   });
+  const { data: payouts } = useQuery({
+    queryKey: ['payouts', 'mine', profile?.id],
+    queryFn: () => fetchMyPayouts(profile!.id),
+    enabled: !!profile,
+  });
+  const payoutsByBooking = useMemo(() => {
+    const map = new Map<string, Payment[]>();
+    for (const p of payouts ?? []) {
+      if (!p.booking_id) continue;
+      if (!map.has(p.booking_id)) map.set(p.booking_id, []);
+      map.get(p.booking_id)!.push(p);
+    }
+    return map;
+  }, [payouts]);
+  const bookingIds = useMemo(() => bookings?.map((b) => b.id) ?? [], [bookings]);
+  const { data: disputes } = useQuery({
+    queryKey: ['disputes', 'received', bookingIds],
+    queryFn: () => fetchDisputesForBookings(bookingIds),
+    enabled: bookingIds.length > 0,
+  });
+  const disputeByBooking = useMemo(() => {
+    const map = new Map<string, Dispute>();
+    for (const d of disputes ?? []) map.set(d.booking_id, d);
+    return map;
+  }, [disputes]);
   const { data: reviewedIds } = useQuery({
     queryKey: ['my-reviewed-bookings', profile?.id],
     queryFn: () => fetchMyReviewedBookingIds(profile!.id),
@@ -174,6 +223,18 @@ export function BookingsReceivedPage() {
               <BookingStatusPill status={b.status} />
             </div>
 
+            {b.cancellation_reason ? (
+              <p className="mt-1.5 text-xs text-muted">Reason: {b.cancellation_reason}</p>
+            ) : null}
+            {disputeByBooking.has(b.id) ? (() => {
+              const d = disputeByBooking.get(b.id)!;
+              return d.status === 'open' ? (
+                <p className="mt-1.5 text-xs font-semibold text-warn">🚩 A reported issue on this booking is under review.</p>
+              ) : (
+                <p className="mt-1.5 text-xs text-good">✓ Issue resolved: {d.resolution_notes}</p>
+              );
+            })() : null}
+
             <div className="mt-3 flex gap-5 text-[12.5px]">
               <div><span className="text-muted">Total price</span> <strong className="tabular">{formatCurrency(b.total_price)}</strong></div>
               {b.status === 'downpayment_paid' ? (
@@ -230,7 +291,35 @@ export function BookingsReceivedPage() {
                   💬 {chatOpenId === b.id ? 'Hide Chat' : 'Message Renter'}
                 </Button>
               ) : null}
+              {(payoutsByBooking.get(b.id)?.length ?? 0) > 0 ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPayoutsOpenId(payoutsOpenId === b.id ? null : b.id)}
+                >
+                  🧾 {payoutsOpenId === b.id ? 'Hide Payment Details' : 'Payment Details'}
+                </Button>
+              ) : null}
             </div>
+            {payoutsOpenId === b.id ? (
+              <div className="mt-3 rounded-lg border border-line bg-surface-2 p-3.5">
+                <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Payment Details</h4>
+                <div className="flex flex-col gap-2">
+                  {payoutsByBooking.get(b.id)?.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between text-[12.5px]">
+                      <div>
+                        <span className="font-semibold">{PAYMENT_TYPE_LABEL[p.payment_type]}</span>
+                        <span className="ml-2 text-muted">{formatDate(p.created_at)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="tabular font-semibold">{formatCurrency(p.amount)}</span>
+                        <Pill tone={paymentStatusTone(p.status)}>{paymentStatusLabel(p.payment_type, p.status)}</Pill>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {chatOpenId === b.id && profile ? <BookingChat bookingId={b.id} currentUserId={profile.id} /> : null}
           </Card>
         ))}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CarFront, CalendarClock, History } from 'lucide-react';
@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookingStatusPill, RatingBadge } from '@/components/ui/pill';
+import { BookingStatusPill, Pill, RatingBadge } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
@@ -21,7 +21,8 @@ import { fetchRatingSummaries } from '@/lib/ratings';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 import { formatTime, pickupTimestamp, useNoShowGraceMinutes } from '@/lib/pickup';
 import { isHistoryStatus } from '@/lib/booking-status';
-import type { Booking, CarModel, CarBrand, Profile } from '@/lib/database.types';
+import { PAYMENT_TYPE_LABEL, paymentStatusLabel, paymentStatusTone } from '@/lib/payment-display';
+import type { Booking, CarModel, CarBrand, Profile, Payment, Dispute } from '@/lib/database.types';
 
 type BookingRow = Booking & {
   vehicle: { plate_number: string; rental_agreement_path: string | null; model: CarModel & { brand: CarBrand } };
@@ -60,6 +61,23 @@ async function fetchMyReviewedBookingIds(reviewerId: string) {
   return new Set(data.map((r) => r.booking_id));
 }
 
+async function fetchDisputesForBookings(bookingIds: string[]) {
+  if (bookingIds.length === 0) return [];
+  const { data, error } = await supabase.from('disputes').select('*').in('booking_id', bookingIds);
+  if (error) throw error;
+  return data as Dispute[];
+}
+
+async function fetchMyPayments(payerId: string) {
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*')
+    .eq('payer_id', payerId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data as Payment[];
+}
+
 export function MyBookingsPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -68,6 +86,7 @@ export function MyBookingsPage() {
   const reportDialog = useConfirmTarget<string>();
   const rateDialog = useConfirmTarget<string>();
   const [chatOpenId, setChatOpenId] = useState<string | null>(null);
+  const [paymentsOpenId, setPaymentsOpenId] = useState<string | null>(null);
   const [tab, setTab] = useState<'active' | 'history'>('active');
 
   const { data: bookings, isLoading } = useQuery({
@@ -75,6 +94,31 @@ export function MyBookingsPage() {
     queryFn: () => fetchMyBookings(profile!.id),
     enabled: !!profile,
   });
+  const { data: payments } = useQuery({
+    queryKey: ['payments', 'mine', profile?.id],
+    queryFn: () => fetchMyPayments(profile!.id),
+    enabled: !!profile,
+  });
+  const paymentsByBooking = useMemo(() => {
+    const map = new Map<string, Payment[]>();
+    for (const p of payments ?? []) {
+      if (!p.booking_id) continue;
+      if (!map.has(p.booking_id)) map.set(p.booking_id, []);
+      map.get(p.booking_id)!.push(p);
+    }
+    return map;
+  }, [payments]);
+  const bookingIds = useMemo(() => bookings?.map((b) => b.id) ?? [], [bookings]);
+  const { data: disputes } = useQuery({
+    queryKey: ['disputes', 'mine', bookingIds],
+    queryFn: () => fetchDisputesForBookings(bookingIds),
+    enabled: bookingIds.length > 0,
+  });
+  const disputeByBooking = useMemo(() => {
+    const map = new Map<string, Dispute>();
+    for (const d of disputes ?? []) map.set(d.booking_id, d);
+    return map;
+  }, [disputes]);
   const { data: settings } = useQuery({ queryKey: ['cancellation-settings'], queryFn: fetchCancellationSettings });
   const { data: graceMinutes } = useNoShowGraceMinutes();
   const { data: reviewedIds } = useQuery({
@@ -181,6 +225,18 @@ export function MyBookingsPage() {
                 <BookingStatusPill status={b.status} />
               </div>
 
+              {b.cancellation_reason ? (
+                <p className="mt-1.5 text-xs text-muted">Reason: {b.cancellation_reason}</p>
+              ) : null}
+              {disputeByBooking.has(b.id) ? (() => {
+                const d = disputeByBooking.get(b.id)!;
+                return d.status === 'open' ? (
+                  <p className="mt-1.5 text-xs font-semibold text-warn">🚩 Your reported issue is under review.</p>
+                ) : (
+                  <p className="mt-1.5 text-xs text-good">✓ Issue resolved: {d.resolution_notes}</p>
+                );
+              })() : null}
+
               <div className="mt-2.5 flex items-center gap-2">
                 <Avatar avatarPath={b.owner.avatar_url} firstName={b.owner.first_name} lastName={b.owner.last_name} size="sm" />
                 <div className="text-[12.5px]">
@@ -259,9 +315,37 @@ export function MyBookingsPage() {
                     💬 {chatOpenId === b.id ? 'Hide Chat' : 'Message Owner'}
                   </Button>
                 ) : null}
+                {(paymentsByBooking.get(b.id)?.length ?? 0) > 0 ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPaymentsOpenId(paymentsOpenId === b.id ? null : b.id)}
+                  >
+                    🧾 {paymentsOpenId === b.id ? 'Hide Payment Details' : 'Payment Details'}
+                  </Button>
+                ) : null}
               </div>
               {pay.isError && pay.variables?.bookingId === b.id ? (
                 <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(pay.error)}</p>
+              ) : null}
+              {paymentsOpenId === b.id ? (
+                <div className="mt-3 rounded-lg border border-line bg-surface-2 p-3.5">
+                  <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Payment Details</h4>
+                  <div className="flex flex-col gap-2">
+                    {paymentsByBooking.get(b.id)?.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between text-[12.5px]">
+                        <div>
+                          <span className="font-semibold">{PAYMENT_TYPE_LABEL[p.payment_type]}</span>
+                          <span className="ml-2 text-muted">{formatDate(p.created_at)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="tabular font-semibold">{formatCurrency(p.amount)}</span>
+                          <Pill tone={paymentStatusTone(p.status)}>{paymentStatusLabel(p.payment_type, p.status)}</Pill>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ) : null}
               {chatOpenId === b.id && profile ? <BookingChat bookingId={b.id} currentUserId={profile.id} /> : null}
             </div>

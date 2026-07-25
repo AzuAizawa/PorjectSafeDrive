@@ -164,7 +164,12 @@ export function MyVehiclesPage() {
                     <td className="px-4 py-3 font-bold">{v.model.brand.name} {v.model.name}</td>
                     <td className="tabular px-4 py-3">{v.plate_number}</td>
                     <td className="tabular px-4 py-3">{formatCurrency(v.daily_price)}</td>
-                    <td className="px-4 py-3">{statusPill(v)}</td>
+                    <td className="px-4 py-3">
+                      {statusPill(v)}
+                      {v.approval_status === 'rejected' && v.rejection_reason ? (
+                        <p className="mt-1 max-w-[220px] text-xs text-muted">{v.rejection_reason}</p>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3">
                       <Link to={`/my-vehicles/${v.id}/edit`}><Button size="sm" variant="secondary">Edit</Button></Link>
                     </td>
