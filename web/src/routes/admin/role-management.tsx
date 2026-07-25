@@ -41,6 +41,8 @@ export function AdminRoleManagementPage() {
   const [selected, setSelected] = useState<Profile | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffResult, setNewStaffResult] = useState<string | null>(null);
 
   const { data: users } = useQuery({ queryKey: ['role-mgmt-users'], queryFn: fetchUsers });
   const { data: requests } = useQuery({ queryKey: ['role-mgmt-requests'], queryFn: fetchPendingRequests });
@@ -50,6 +52,19 @@ export function AdminRoleManagementPage() {
     queryClient.invalidateQueries({ queryKey: ['role-mgmt-requests'] });
     setSelected(null);
   };
+
+  const createStaff = useMutation({
+    mutationFn: async (email: string) => {
+      const { data, error } = await supabase.functions.invoke('create-staff-account', { body: { email } });
+      if (error) throw error;
+      return data as { email: string };
+    },
+    onSuccess: (data) => {
+      setNewStaffResult(`Invite sent to ${data.email} — they'll set their own password and start as Support.`);
+      setNewStaffEmail('');
+      queryClient.invalidateQueries({ queryKey: ['role-mgmt-users'] });
+    },
+  });
 
   const requestChange = useMutation({
     mutationFn: async (newRole: 'admin' | 'super_admin') => {
@@ -99,6 +114,39 @@ export function AdminRoleManagementPage() {
           effect immediately. Every change is recorded in the Audit Trail and notified to other super admins.
         </p>
       </div>
+
+      <Card className="mb-4.5 p-5">
+        <h4 className="mb-1 text-xs font-bold uppercase tracking-wide text-muted">Create Staff Account</h4>
+        <p className="mb-3 max-w-[70ch] text-xs text-muted">
+          Staff accounts are always created fresh, never by promoting an existing renter/customer account — the new
+          hire gets their own dedicated identity from day one, starting at Support, and sets their own password via
+          an emailed invite. Escalating from there still goes through the approval flow above.
+        </p>
+        <form
+          className="flex flex-wrap items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setNewStaffResult(null);
+            createStaff.mutate(newStaffEmail);
+          }}
+        >
+          <div className="flex-1 min-w-[220px]">
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">Email</label>
+            <input
+              type="email"
+              required
+              className="input-base w-full"
+              value={newStaffEmail}
+              onChange={(e) => setNewStaffEmail(e.target.value)}
+            />
+          </div>
+          <Button type="submit" disabled={createStaff.isPending}>
+            {createStaff.isPending ? 'Sending invite…' : 'Send Invite'}
+          </Button>
+        </form>
+        {newStaffResult ? <p className="mt-2 text-xs text-good">{newStaffResult}</p> : null}
+        {createStaff.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(createStaff.error)}</p> : null}
+      </Card>
 
       {requests && requests.length > 0 ? (
         <Card className="mb-4.5 p-5">
@@ -209,7 +257,7 @@ export function AdminRoleManagementPage() {
               <p className="text-xs text-muted">A role change request is already pending for this account — resolve it above first.</p>
             ) : (
               <div className="flex flex-col gap-3">
-                {selected.role === 'user' || selected.role === 'support' ? (
+                {selected.role === 'support' ? (
                   <div>
                     <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Request escalation</h4>
                     <p className="mb-2 text-xs text-muted">Requires a different super admin to approve before it takes effect.</p>
@@ -223,12 +271,17 @@ export function AdminRoleManagementPage() {
                     </div>
                     {requestChange.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(requestChange.error)}</p> : null}
                   </div>
+                ) : selected.role === 'user' ? (
+                  <p className="text-xs text-muted">
+                    Renter/customer accounts can't be escalated to staff here — use "Create Staff Account" above to
+                    provision a dedicated account instead.
+                  </p>
                 ) : null}
 
                 <div>
                   <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Demote (immediate, no approval needed)</h4>
                   <div className="flex flex-wrap gap-2">
-                    {selected.role !== 'support' ? (
+                    {selected.role === 'admin' || selected.role === 'super_admin' ? (
                       <Button size="sm" variant="secondary" disabled={demote.isPending} onClick={() => demote.mutate('support')}>
                         Set to Support
                       </Button>
