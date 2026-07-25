@@ -1,13 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { signedUrl } from '@/lib/storage';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
+import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
+import { MultiSelectDropdown } from '@/components/ui/multi-select-dropdown';
 import { formatCurrency } from '@/lib/utils';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { CarBrand, CarModel, ListingReport, Profile, Vehicle } from '@/lib/database.types';
+
+const APPROVAL_OPTIONS = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+];
 
 type VehicleRow = Vehicle & { model: CarModel & { brand: CarBrand }; owner: Pick<Profile, 'first_name' | 'last_name' | 'verified_status'> };
 type ReportRow = ListingReport & {
@@ -44,16 +52,30 @@ export function AdminVehiclesPage() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<VehicleRow | null>(null);
   const [orcrUrl, setOrcrUrl] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
+  const rejectDialog = useConfirmTarget<string>();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [approvalFilter, setApprovalFilter] = useState<string[]>([]);
+  const [notesDraft, setNotesDraft] = useState('');
 
   const { data: vehicles } = useQuery({ queryKey: ['admin-vehicles'], queryFn: fetchVehicles });
   const { data: reports } = useQuery({ queryKey: ['admin-listing-reports'], queryFn: fetchOpenReports });
 
+  const filteredVehicles = useMemo(() => {
+    if (!vehicles) return [];
+    const q = search.toLowerCase();
+    return vehicles.filter((v) => {
+      const haystack = `${v.model.brand.name} ${v.model.name} ${v.owner.first_name ?? ''} ${v.owner.last_name ?? ''} ${v.plate_number}`.toLowerCase();
+      const matchesQ = !q || haystack.includes(q);
+      const matchesApproval = approvalFilter.length === 0 || approvalFilter.includes(v.approval_status);
+      return matchesQ && matchesApproval;
+    });
+  }, [vehicles, search, approvalFilter]);
+
   async function openReview(v: VehicleRow) {
     setSelected(v);
-    setRejectReason('');
     setOrcrUrl(v.orcr_path ? await signedUrl('vehicle-documents', v.orcr_path) : null);
+    setNotesDraft(v.admin_notes ?? '');
   }
 
   const invalidate = () => {
@@ -75,8 +97,10 @@ export function AdminVehiclesPage() {
       const { error } = await supabase.rpc('reject_vehicle', { p_vehicle_id: vars.vehicleId, p_reason: vars.reason });
       if (error) throw error;
     },
-    onSuccess: invalidate,
-    onError: (e) => setActionError(friendlyErrorMessage(e)),
+    onSuccess: () => {
+      invalidate();
+      rejectDialog.close();
+    },
   });
   const dismissReport = useMutation({
     mutationFn: async (reportId: string) => {
@@ -84,6 +108,14 @@ export function AdminVehiclesPage() {
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-listing-reports'] }),
+    onError: (e) => setActionError(friendlyErrorMessage(e)),
+  });
+  const saveNotes = useMutation({
+    mutationFn: async (notes: string) => {
+      const { error } = await supabase.from('vehicles').update({ admin_notes: notes || null }).eq('id', selected!.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-vehicles'] }),
     onError: (e) => setActionError(friendlyErrorMessage(e)),
   });
 
@@ -130,6 +162,16 @@ export function AdminVehiclesPage() {
         </Card>
       ) : null}
 
+      <div className="mb-4 flex flex-wrap items-center gap-2.5">
+        <input
+          className="input-base min-w-[220px] flex-1"
+          placeholder="Search by vehicle, owner, or plate…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <MultiSelectDropdown label="Status" options={APPROVAL_OPTIONS} selected={approvalFilter} onChange={setApprovalFilter} />
+      </div>
+
       <div className="grid grid-cols-[1.4fr_1fr] gap-5 items-start">
         <div className="rounded-2xl border border-line bg-surface">
           <table className="w-full border-collapse">
@@ -143,7 +185,7 @@ export function AdminVehiclesPage() {
               </tr>
             </thead>
             <tbody>
-              {vehicles?.map((v) => (
+              {filteredVehicles.map((v) => (
                 <tr key={v.id} className="border-t border-line text-[13.5px]">
                   <td className="px-4 py-3 font-bold">{v.model.brand.name} {v.model.name}</td>
                   <td className="px-4 py-3">{v.owner.first_name} {v.owner.last_name}</td>
@@ -158,6 +200,9 @@ export function AdminVehiclesPage() {
               ))}
             </tbody>
           </table>
+          {vehicles && filteredVehicles.length === 0 ? (
+            <p className="p-4 text-sm text-muted">No vehicles match your search/filters.</p>
+          ) : null}
         </div>
 
         {selected ? (
@@ -179,28 +224,52 @@ export function AdminVehiclesPage() {
             ) : (
               <p className="mb-4 text-xs text-bad">No ORCR uploaded yet.</p>
             )}
-            <input
-              className="input-base mb-2"
-              placeholder="Rejection reason (if rejecting)"
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-            />
             <div className="flex justify-end gap-2">
-              <Button
-                variant="danger"
-                size="sm"
-                disabled={!rejectReason || reject.isPending}
-                onClick={() => reject.mutate({ vehicleId: selected.id, reason: rejectReason })}
-              >
+              <Button variant="danger" size="sm" onClick={() => rejectDialog.open(selected.id)}>
                 Reject
               </Button>
               <Button size="sm" disabled={approve.isPending} onClick={() => approve.mutate(selected.id)}>
                 Approve
               </Button>
             </div>
+
+            <div className="mt-4 border-t border-line pt-4">
+              <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Internal Notes</h4>
+              <p className="mb-2 text-xs text-muted">Visible to admin/support only — never shown to the owner.</p>
+              <textarea
+                className="input-base h-20 w-full resize-none py-2"
+                placeholder="e.g. owner disputes ORCR delay, called them"
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+              />
+              <div className="mt-2 flex justify-end">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={saveNotes.isPending || notesDraft === (selected.admin_notes ?? '')}
+                  onClick={() => saveNotes.mutate(notesDraft)}
+                >
+                  {saveNotes.isPending ? 'Saving…' : 'Save Note'}
+                </Button>
+              </div>
+            </div>
           </Card>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={!!rejectDialog.target}
+        title="Reject this vehicle listing?"
+        description="The owner will see this reason on My Vehicles and in their notification, so they know exactly what to fix before resubmitting."
+        requireReason
+        reasonPlaceholder="e.g. ORCR name doesn't match the owner's verified identity"
+        confirmLabel="Reject"
+        confirmVariant="danger"
+        pending={reject.isPending}
+        onConfirm={(reason) => rejectDialog.target && reject.mutate({ vehicleId: rejectDialog.target, reason: reason! })}
+        onCancel={rejectDialog.close}
+        error={reject.isError ? friendlyErrorMessage(reject.error) : null}
+      />
     </div>
   );
 }

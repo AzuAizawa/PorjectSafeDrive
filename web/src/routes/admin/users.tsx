@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
@@ -7,9 +7,24 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
+import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog';
+import { MultiSelectDropdown } from '@/components/ui/multi-select-dropdown';
 import { formatDate } from '@/lib/utils';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 import type { Profile, VerificationSubmission } from '@/lib/database.types';
+
+const VERIFICATION_OPTIONS = [
+  { value: 'unverified', label: 'Unverified' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'verified', label: 'Verified' },
+  { value: 'rejected', label: 'Rejected' },
+];
+
+const ACCOUNT_OPTIONS = [
+  { value: 'active', label: 'Active' },
+  { value: 'suspended', label: 'Suspended' },
+  { value: 'banned', label: 'Banned' },
+];
 
 async function fetchUsers() {
   const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -57,9 +72,25 @@ export function AdminUsersPage() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Profile | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
-  const [rejectReason, setRejectReason] = useState('');
+  const [search, setSearch] = useState('');
+  const [verificationFilter, setVerificationFilter] = useState<string[]>([]);
+  const [accountFilter, setAccountFilter] = useState<string[]>([]);
+  const [notesDraft, setNotesDraft] = useState('');
+  const rejectDialog = useConfirmTarget<string>();
 
   const { data: users } = useQuery({ queryKey: ['admin-users'], queryFn: fetchUsers });
+
+  const filteredUsers = useMemo(() => {
+    if (!users) return [];
+    const q = search.toLowerCase();
+    return users.filter((u) => {
+      const name = `${u.first_name ?? ''} ${u.last_name ?? ''}`.toLowerCase();
+      const matchesQ = !q || name.includes(q) || u.email.toLowerCase().includes(q);
+      const matchesVerification = verificationFilter.length === 0 || verificationFilter.includes(u.verified_status);
+      const matchesAccount = accountFilter.length === 0 || accountFilter.includes(u.account_status);
+      return matchesQ && matchesVerification && matchesAccount;
+    });
+  }, [users, search, verificationFilter, accountFilter]);
   const { data: submission } = useQuery({
     queryKey: ['verification-submission', selected?.id],
     queryFn: () => fetchLatestSubmission(selected!.id),
@@ -68,8 +99,8 @@ export function AdminUsersPage() {
 
   async function openUser(user: Profile) {
     setSelected(user);
-    setRejectReason('');
     setImageUrls({});
+    setNotesDraft(user.admin_notes ?? '');
     if (user.verified_status === 'pending') {
       const sub = await fetchLatestSubmission(user.id);
       if (sub) {
@@ -115,7 +146,10 @@ export function AdminUsersPage() {
       const { error } = await supabase.rpc('reject_verification', { p_submission_id: vars.submissionId, p_reason: vars.reason });
       if (error) throw error;
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      rejectDialog.close();
+    },
   });
   const setStatus = useMutation({
     mutationFn: async (status: 'active' | 'suspended' | 'banned') => {
@@ -131,12 +165,12 @@ export function AdminUsersPage() {
     },
     onSuccess: invalidate,
   });
-  const changeRole = useMutation({
-    mutationFn: async (role: 'user' | 'support' | 'admin') => {
-      const { error } = await supabase.rpc('promote_user_role', { p_profile_id: selected!.id, p_new_role: role });
+  const saveNotes = useMutation({
+    mutationFn: async (notes: string) => {
+      const { error } = await supabase.from('profiles').update({ admin_notes: notes || null }).eq('id', selected!.id);
       if (error) throw error;
     },
-    onSuccess: invalidate,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 
   return (
@@ -145,6 +179,17 @@ export function AdminUsersPage() {
         <div className="mb-1.5 text-[11.5px] font-bold uppercase tracking-wide text-accent">Admin</div>
         <h1 className="text-2xl">Users</h1>
         <p className="mt-1.5 text-muted">Review verification submissions and manage accounts.</p>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2.5">
+        <input
+          className="input-base min-w-[220px] flex-1"
+          placeholder="Search by name or email…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <MultiSelectDropdown label="Verification" options={VERIFICATION_OPTIONS} selected={verificationFilter} onChange={setVerificationFilter} />
+        <MultiSelectDropdown label="Account" options={ACCOUNT_OPTIONS} selected={accountFilter} onChange={setAccountFilter} />
       </div>
 
       <div className="grid grid-cols-[1.4fr_1fr] items-start gap-5">
@@ -161,7 +206,7 @@ export function AdminUsersPage() {
               </tr>
             </thead>
             <tbody>
-              {users?.map((u) => (
+              {filteredUsers.map((u) => (
                 <tr key={u.id} className="border-t border-line text-[13.5px]">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
@@ -183,6 +228,9 @@ export function AdminUsersPage() {
               ))}
             </tbody>
           </table>
+          {users && filteredUsers.length === 0 ? (
+            <p className="p-4 text-sm text-muted">No users match your search/filters.</p>
+          ) : null}
         </div>
 
         {selected ? (
@@ -216,19 +264,8 @@ export function AdminUsersPage() {
                     </a>
                   ))}
                 </div>
-                <input
-                  className="input-base mb-2"
-                  placeholder="Rejection reason (if rejecting)"
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                />
                 <div className="mb-4 flex justify-end gap-2">
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    disabled={!rejectReason || reject.isPending}
-                    onClick={() => reject.mutate({ submissionId: submission.id, reason: rejectReason })}
-                  >
+                  <Button variant="danger" size="sm" onClick={() => rejectDialog.open(submission.id)}>
                     Reject
                   </Button>
                   <Button
@@ -246,7 +283,6 @@ export function AdminUsersPage() {
                   </Button>
                 </div>
                 {approve.isError ? <p className="mb-3 text-xs text-bad">{friendlyErrorMessage(approve.error)}</p> : null}
-                {reject.isError ? <p className="mb-3 text-xs text-bad">{friendlyErrorMessage(reject.error)}</p> : null}
               </>
             ) : (
               <p className="mb-4 text-sm text-muted">{statusPill(selected.verified_status)}</p>
@@ -284,32 +320,44 @@ export function AdminUsersPage() {
               {clearStrikes.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(clearStrikes.error)}</p> : null}
             </div>
 
-            {isFullAdmin ? (
-              <div className="border-t border-line pt-4">
-                <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Staff Role</h4>
-                {selected.id === viewer?.id ? (
-                  <p className="text-xs text-muted">You can't change your own role here.</p>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <select
-                      className="input-base w-auto"
-                      value={selected.role}
-                      disabled={changeRole.isPending}
-                      onChange={(e) => changeRole.mutate(e.target.value as 'user' | 'support' | 'admin')}
-                    >
-                      <option value="user">User</option>
-                      <option value="support">Support</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <span className="text-xs text-muted">Every change is recorded in the Audit Trail.</span>
-                  </div>
-                )}
-                {changeRole.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(changeRole.error)}</p> : null}
+            <div className="mt-4 border-t border-line pt-4">
+              <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Internal Notes</h4>
+              <p className="mb-2 text-xs text-muted">Visible to admin/support only — never shown to the user.</p>
+              <textarea
+                className="input-base h-20 w-full resize-none py-2"
+                placeholder="e.g. borderline selfie match, watch this account"
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+              />
+              <div className="mt-2 flex justify-end">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={saveNotes.isPending || notesDraft === (selected.admin_notes ?? '')}
+                  onClick={() => saveNotes.mutate(notesDraft)}
+                >
+                  {saveNotes.isPending ? 'Saving…' : 'Save Note'}
+                </Button>
               </div>
-            ) : null}
+              {saveNotes.isError ? <p className="mt-1 text-xs text-bad">{friendlyErrorMessage(saveNotes.error)}</p> : null}
+            </div>
           </Card>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={!!rejectDialog.target}
+        title="Reject this verification submission?"
+        description="The user will see this reason on their Get Verified page and in their notification, so they know exactly what to fix before resubmitting."
+        requireReason
+        reasonPlaceholder="e.g. Selfie doesn't clearly match the ID photo"
+        confirmLabel="Reject"
+        confirmVariant="danger"
+        pending={reject.isPending}
+        onConfirm={(reason) => rejectDialog.target && reject.mutate({ submissionId: rejectDialog.target, reason: reason! })}
+        onCancel={rejectDialog.close}
+        error={reject.isError ? friendlyErrorMessage(reject.error) : null}
+      />
     </div>
   );
 }
