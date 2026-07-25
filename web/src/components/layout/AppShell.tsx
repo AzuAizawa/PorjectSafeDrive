@@ -21,23 +21,24 @@ const listerNav = [
 ];
 
 // Each item lists which roles can see it, matching the backend's RequireRole
-// route guards and RPC checks exactly. Super Admin only sees Role
-// Management plus the two oversight pages (Audit Trail, Security Log) — no
-// Settings/Payments/Catalog, per the brainstorm decision to keep the
-// identity-and-access role separate from day-to-day operational power.
+// route guards and RPC checks exactly. Super Admin is a strict superset of
+// Admin (sees everything Admin does, plus the identity/access-only Role
+// Management page) — matches how "Super Admin"/"Owner" reads in the
+// products most people actually reference (Okta, Google Workspace, GitHub,
+// Stripe), rather than a role with LESS power than a regular Admin.
 const adminNav = [
-  { to: '/admin', label: 'Dashboard', roles: ['support', 'admin'] },
-  { to: '/admin/analytics', label: 'Analytics', roles: ['support', 'admin'] },
-  { to: '/admin/users', label: 'Users', roles: ['support', 'admin'] },
-  { to: '/admin/vehicles', label: 'Vehicle Approval', roles: ['support', 'admin'] },
-  { to: '/admin/disputes', label: 'Disputes', roles: ['support', 'admin'] },
-  { to: '/admin/inquiries', label: 'Inquiries', roles: ['support', 'admin'] },
-  { to: '/admin/catalog', label: 'Car Catalog', roles: ['admin'] },
-  { to: '/admin/payments', label: 'Send Payments', roles: ['admin'] },
+  { to: '/admin', label: 'Dashboard', roles: ['support', 'admin', 'super_admin'] },
+  { to: '/admin/analytics', label: 'Analytics', roles: ['support', 'admin', 'super_admin'] },
+  { to: '/admin/users', label: 'Users', roles: ['support', 'admin', 'super_admin'] },
+  { to: '/admin/vehicles', label: 'Vehicle Approval', roles: ['support', 'admin', 'super_admin'] },
+  { to: '/admin/disputes', label: 'Disputes', roles: ['support', 'admin', 'super_admin'] },
+  { to: '/admin/inquiries', label: 'Inquiries', roles: ['support', 'admin', 'super_admin'] },
+  { to: '/admin/catalog', label: 'Car Catalog', roles: ['admin', 'super_admin'] },
+  { to: '/admin/payments', label: 'Send Payments', roles: ['admin', 'super_admin'] },
   { to: '/admin/audit', label: 'Audit Trail', roles: ['admin', 'super_admin'] },
   { to: '/admin/security-log', label: 'Security Log', roles: ['admin', 'super_admin'] },
-  { to: '/admin/settings', label: 'Settings', roles: ['admin'] },
-  { to: '/admin/company-info', label: 'Company Info', roles: ['admin'] },
+  { to: '/admin/settings', label: 'Settings', roles: ['admin', 'super_admin'] },
+  { to: '/admin/company-info', label: 'Company Info', roles: ['admin', 'super_admin'] },
   { to: '/admin/role-management', label: 'Role Management', roles: ['super_admin'] },
 ];
 

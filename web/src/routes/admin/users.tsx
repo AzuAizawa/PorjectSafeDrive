@@ -68,7 +68,7 @@ function accountPill(status: Profile['account_status']) {
 
 export function AdminUsersPage() {
   const { profile: viewer } = useAuth();
-  const isFullAdmin = viewer?.role === 'admin';
+  const isFullAdmin = viewer?.role === 'admin' || viewer?.role === 'super_admin';
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Profile | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});

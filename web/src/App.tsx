@@ -38,9 +38,11 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 // Single source of truth for "where does this role land" — used both by the
 // index route and by every guard's redirect target, so they can never drift.
+// Super Admin lands on the same Dashboard as Admin/Support, since it now has
+// full operational access too — Role Management is just one more nav item,
+// not the account's only reason to exist.
 function homeRouteFor(role: string | undefined) {
-  if (role === 'super_admin') return '/admin/role-management';
-  if (role === 'admin' || role === 'support') return '/admin';
+  if (role === 'admin' || role === 'support' || role === 'super_admin') return '/admin';
   return '/browse';
 }
 
@@ -101,18 +103,18 @@ export default function App() {
         <Route path="my-vehicles/:id/edit" element={<RequireRenter><EditVehiclePage /></RequireRenter>} />
         <Route path="bookings-received" element={<RequireRenter><BookingsReceivedPage /></RequireRenter>} />
 
-        <Route path="admin" element={<RequireRole roles={['support', 'admin']}><AdminDashboardPage /></RequireRole>} />
-        <Route path="admin/analytics" element={<RequireRole roles={['support', 'admin']}><AdminAnalyticsPage /></RequireRole>} />
-        <Route path="admin/users" element={<RequireRole roles={['support', 'admin']}><AdminUsersPage /></RequireRole>} />
-        <Route path="admin/vehicles" element={<RequireRole roles={['support', 'admin']}><AdminVehiclesPage /></RequireRole>} />
-        <Route path="admin/disputes" element={<RequireRole roles={['support', 'admin']}><AdminDisputesPage /></RequireRole>} />
-        <Route path="admin/inquiries" element={<RequireRole roles={['support', 'admin']}><AdminInquiriesPage /></RequireRole>} />
-        <Route path="admin/catalog" element={<RequireRole roles={['admin']}><AdminCatalogPage /></RequireRole>} />
-        <Route path="admin/payments" element={<RequireRole roles={['admin']}><AdminPaymentsPage /></RequireRole>} />
+        <Route path="admin" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminDashboardPage /></RequireRole>} />
+        <Route path="admin/analytics" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminAnalyticsPage /></RequireRole>} />
+        <Route path="admin/users" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminUsersPage /></RequireRole>} />
+        <Route path="admin/vehicles" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminVehiclesPage /></RequireRole>} />
+        <Route path="admin/disputes" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminDisputesPage /></RequireRole>} />
+        <Route path="admin/inquiries" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminInquiriesPage /></RequireRole>} />
+        <Route path="admin/catalog" element={<RequireRole roles={['admin', 'super_admin']}><AdminCatalogPage /></RequireRole>} />
+        <Route path="admin/payments" element={<RequireRole roles={['admin', 'super_admin']}><AdminPaymentsPage /></RequireRole>} />
         <Route path="admin/audit" element={<RequireRole roles={['admin', 'super_admin']}><AdminAuditPage /></RequireRole>} />
         <Route path="admin/security-log" element={<RequireRole roles={['admin', 'super_admin']}><AdminSecurityLogPage /></RequireRole>} />
-        <Route path="admin/settings" element={<RequireRole roles={['admin']}><AdminSettingsPage /></RequireRole>} />
-        <Route path="admin/company-info" element={<RequireRole roles={['admin']}><AdminCompanyInfoPage /></RequireRole>} />
+        <Route path="admin/settings" element={<RequireRole roles={['admin', 'super_admin']}><AdminSettingsPage /></RequireRole>} />
+        <Route path="admin/company-info" element={<RequireRole roles={['admin', 'super_admin']}><AdminCompanyInfoPage /></RequireRole>} />
         <Route path="admin/role-management" element={<RequireRole roles={['super_admin']}><AdminRoleManagementPage /></RequireRole>} />
       </Route>
 

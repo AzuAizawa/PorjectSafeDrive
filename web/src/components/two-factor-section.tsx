@@ -16,7 +16,7 @@ async function fetchFactors() {
 // is needed.
 export function TwoFactorSection() {
   const { profile } = useAuth();
-  const isStaff = profile?.role === 'admin' || profile?.role === 'support';
+  const isStaff = profile?.role === 'admin' || profile?.role === 'support' || profile?.role === 'super_admin';
   const queryClient = useQueryClient();
   const { data: verifiedFactors } = useQuery({ queryKey: ['mfa-factors'], queryFn: fetchFactors });
   const [enrolling, setEnrolling] = useState<{ factorId: string; qrCode: string; secret: string } | null>(null);
