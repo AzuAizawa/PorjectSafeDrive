@@ -8,6 +8,13 @@ import { PasswordInput, passwordMeetsRules } from '@/components/password-input';
 
 type Mode = 'login' | 'signup' | 'forgot';
 
+function formatRetryAfter(seconds: number) {
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.round((minutes / 60) * 10) / 10;
+  return `${hours} hour${hours === 1 ? '' : 's'}`;
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>('login');
@@ -66,6 +73,15 @@ export function LoginPage() {
       return;
     }
 
+    if (mode === 'login') {
+      const { data: throttle } = await supabase.rpc('check_login_throttle', { p_email: email });
+      const status = throttle?.[0];
+      if (status?.blocked) {
+        setError(`Too many failed attempts. Try again in ${formatRetryAfter(status.retry_after_seconds)}.`);
+        return;
+      }
+    }
+
     setSubmitting(true);
     const action =
       mode === 'login'
@@ -76,6 +92,7 @@ export function LoginPage() {
 
     if (authError) {
       setSubmitting(false);
+      if (mode === 'login') void supabase.rpc('record_login_failure', { p_email: email });
       setError(authError.message);
       return;
     }
