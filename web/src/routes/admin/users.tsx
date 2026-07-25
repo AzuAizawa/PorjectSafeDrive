@@ -101,13 +101,14 @@ export function AdminUsersPage() {
     setSelected(user);
     setImageUrls({});
     setNotesDraft(user.admin_notes ?? '');
-    if (user.verified_status === 'pending') {
-      const sub = await fetchLatestSubmission(user.id);
-      if (sub) {
-        const urls: Record<string, string> = {};
-        for (const key of IMAGE_KEYS) urls[key] = await signedUrl('user-verification', sub[key] as string);
-        setImageUrls(urls);
-      }
+    // Fetch regardless of current status — verified/rejected users previously
+    // showed nothing here at all, so admin had no way to see what was
+    // originally submitted once a decision had already been made.
+    const sub = await fetchLatestSubmission(user.id);
+    if (sub) {
+      const urls: Record<string, string> = {};
+      for (const key of IMAGE_KEYS) urls[key] = await signedUrl('user-verification', sub[key] as string);
+      setImageUrls(urls);
     }
   }
 
@@ -245,13 +246,18 @@ export function AdminUsersPage() {
               </div>
             </div>
 
-            {selected.verified_status === 'pending' && submission ? (
+            <div className="mb-3">{statusPill(selected.verified_status)}</div>
+
+            {submission ? (
               <>
                 {submission.ban_evasion_flag ? (
                   <div className="mb-3 rounded-md border border-bad bg-bad-soft p-3 text-xs text-bad">
                     ⚠ This submission's driver's license or national ID number matches a previously <strong>banned</strong> account.
                     Review carefully before approving — it may be the same person re-registering under a new email.
                   </div>
+                ) : null}
+                {selected.verified_status === 'rejected' && submission.rejection_reason ? (
+                  <p className="mb-3 text-xs text-bad">Rejected: {submission.rejection_reason}</p>
                 ) : null}
                 <dl className="mb-4 grid grid-cols-2 gap-3 text-[13px]">
                   <div><dt className="text-xs text-muted">Full name</dt><dd className="font-semibold">{submission.first_name} {submission.middle_name} {submission.last_name}</dd></div>
@@ -269,28 +275,30 @@ export function AdminUsersPage() {
                     </a>
                   ))}
                 </div>
-                <div className="mb-4 flex justify-end gap-2">
-                  <Button variant="danger" size="sm" onClick={() => rejectDialog.open(submission.id)}>
-                    Reject
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={approve.isPending}
-                    onClick={() =>
-                      approve.mutate({
-                        submissionId: submission.id,
-                        profileId: selected.id,
-                        selfieFacePath: submission.selfie_face_path,
-                      })
-                    }
-                  >
-                    {approve.isPending ? 'Approving…' : 'Approve'}
-                  </Button>
-                </div>
+                {selected.verified_status === 'pending' ? (
+                  <div className="mb-4 flex justify-end gap-2">
+                    <Button variant="danger" size="sm" onClick={() => rejectDialog.open(submission.id)}>
+                      Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={approve.isPending}
+                      onClick={() =>
+                        approve.mutate({
+                          submissionId: submission.id,
+                          profileId: selected.id,
+                          selfieFacePath: submission.selfie_face_path,
+                        })
+                      }
+                    >
+                      {approve.isPending ? 'Approving…' : 'Approve'}
+                    </Button>
+                  </div>
+                ) : null}
                 {approve.isError ? <p className="mb-3 text-xs text-bad">{friendlyErrorMessage(approve.error)}</p> : null}
               </>
             ) : (
-              <p className="mb-4 text-sm text-muted">{statusPill(selected.verified_status)}</p>
+              <p className="mb-4 text-sm text-muted">No verification submission on file yet.</p>
             )}
 
             <div className="border-t border-line pt-4">
