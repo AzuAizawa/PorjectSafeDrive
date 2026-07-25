@@ -28,7 +28,7 @@ export interface Profile {
   address: string | null;
   birthday: string | null;
   avatar_url: string | null;
-  role: 'user' | 'support' | 'admin';
+  role: 'user' | 'support' | 'admin' | 'super_admin';
   is_lister: boolean;
   verified_status: VerifiedStatus;
   account_status: AccountStatus;
@@ -39,8 +39,21 @@ export interface Profile {
   bank_name: string | null;
   bank_account_number: string | null;
   gcash_number: string | null;
+  admin_notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RoleChangeRequest {
+  id: string;
+  target_profile_id: string;
+  requested_role: 'admin' | 'super_admin';
+  requested_by: string;
+  status: 'pending' | 'approved' | 'rejected';
+  resolution_notes: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
 }
 
 export interface VerificationSubmission {
@@ -103,6 +116,7 @@ export interface Vehicle {
   approval_status: ApprovalStatus;
   rejection_reason: string | null;
   listing_status: ListingStatus;
+  admin_notes: string | null;
   created_at: string;
   updated_at: string;
 }

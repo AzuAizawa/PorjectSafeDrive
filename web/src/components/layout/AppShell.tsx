@@ -20,21 +20,25 @@ const listerNav = [
   { to: '/bookings-received', label: 'Bookings Received' },
 ];
 
-// fullAdminOnly items are hidden entirely for the support role, matching the
-// backend: support can't touch settings, payouts/refunds, catalog, or audit.
+// Each item lists which roles can see it, matching the backend's RequireRole
+// route guards and RPC checks exactly. Super Admin only sees Role
+// Management plus the two oversight pages (Audit Trail, Security Log) — no
+// Settings/Payments/Catalog, per the brainstorm decision to keep the
+// identity-and-access role separate from day-to-day operational power.
 const adminNav = [
-  { to: '/admin', label: 'Dashboard', fullAdminOnly: false },
-  { to: '/admin/analytics', label: 'Analytics', fullAdminOnly: false },
-  { to: '/admin/users', label: 'Users', fullAdminOnly: false },
-  { to: '/admin/vehicles', label: 'Vehicle Approval', fullAdminOnly: false },
-  { to: '/admin/disputes', label: 'Disputes', fullAdminOnly: false },
-  { to: '/admin/inquiries', label: 'Inquiries', fullAdminOnly: false },
-  { to: '/admin/catalog', label: 'Car Catalog', fullAdminOnly: true },
-  { to: '/admin/payments', label: 'Send Payments', fullAdminOnly: true },
-  { to: '/admin/audit', label: 'Audit Trail', fullAdminOnly: true },
-  { to: '/admin/security-log', label: 'Security Log', fullAdminOnly: true },
-  { to: '/admin/settings', label: 'Settings', fullAdminOnly: true },
-  { to: '/admin/company-info', label: 'Company Info', fullAdminOnly: true },
+  { to: '/admin', label: 'Dashboard', roles: ['support', 'admin'] },
+  { to: '/admin/analytics', label: 'Analytics', roles: ['support', 'admin'] },
+  { to: '/admin/users', label: 'Users', roles: ['support', 'admin'] },
+  { to: '/admin/vehicles', label: 'Vehicle Approval', roles: ['support', 'admin'] },
+  { to: '/admin/disputes', label: 'Disputes', roles: ['support', 'admin'] },
+  { to: '/admin/inquiries', label: 'Inquiries', roles: ['support', 'admin'] },
+  { to: '/admin/catalog', label: 'Car Catalog', roles: ['admin'] },
+  { to: '/admin/payments', label: 'Send Payments', roles: ['admin'] },
+  { to: '/admin/audit', label: 'Audit Trail', roles: ['admin', 'super_admin'] },
+  { to: '/admin/security-log', label: 'Security Log', roles: ['admin', 'super_admin'] },
+  { to: '/admin/settings', label: 'Settings', roles: ['admin'] },
+  { to: '/admin/company-info', label: 'Company Info', roles: ['admin'] },
+  { to: '/admin/role-management', label: 'Role Management', roles: ['super_admin'] },
 ];
 
 export function AppShell() {
@@ -42,10 +46,9 @@ export function AppShell() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
-  const isStaff = profile?.role === 'admin' || profile?.role === 'support';
-  const isFullAdmin = profile?.role === 'admin';
+  const isStaff = profile?.role === 'admin' || profile?.role === 'support' || profile?.role === 'super_admin';
   const nav = isStaff
-    ? adminNav.filter((item) => !item.fullAdminOnly || isFullAdmin)
+    ? adminNav.filter((item) => profile && item.roles.includes(profile.role))
     : profile?.is_lister
       ? listerNav
       : renterNav;

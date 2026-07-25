@@ -8,9 +8,10 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TwoFactorSection } from '@/components/two-factor-section';
 import { Avatar } from '@/components/ui/avatar';
-import { RatingBadge } from '@/components/ui/pill';
+import { Pill, RatingBadge } from '@/components/ui/pill';
 import { fetchRatingSummaries } from '@/lib/ratings';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
+import { roleLabel } from '@/lib/role-display';
 
 const schema = z.object({
   phone: z.string().min(7, 'Enter a valid phone number').max(15),
@@ -109,7 +110,10 @@ export function ProfilePage() {
         <div className="mb-3 flex items-center gap-3">
           <Avatar avatarPath={profile?.avatar_url} firstName={profile?.first_name} lastName={profile?.last_name} size="lg" />
           <div>
-            <h3 className="text-sm font-bold">Verified identity</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold">Verified identity</h3>
+              {profile && profile.role !== 'user' ? <Pill tone="info">{roleLabel(profile.role)}</Pill> : null}
+            </div>
             <p className="text-xs text-muted">
               {profile?.avatar_url
                 ? 'Your face-only selfie is shown to renters/owners as your profile picture.'
