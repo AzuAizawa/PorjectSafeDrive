@@ -74,6 +74,7 @@ export function AdminVehiclesPage() {
   const [search, setSearch] = useState('');
   const [approvalFilter, setApprovalFilter] = useState<string[]>([]);
   const [notesDraft, setNotesDraft] = useState('');
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
 
   const { data: vehicles } = useQuery({ queryKey: ['admin-vehicles'], queryFn: fetchVehicles });
   const { data: reports } = useQuery({ queryKey: ['admin-listing-reports'], queryFn: fetchOpenReports });
@@ -118,7 +119,10 @@ export function AdminVehiclesPage() {
       const { error } = await supabase.rpc('approve_vehicle', { p_vehicle_id: vehicleId });
       if (error) throw error;
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      setApproveConfirmOpen(false);
+    },
     onError: (e) => setActionError(friendlyErrorMessage(e)),
   });
   const reject = useMutation({
@@ -299,7 +303,7 @@ export function AdminVehiclesPage() {
                 <Button variant="danger" size="sm" onClick={() => rejectDialog.open(selected.id)}>
                   Reject
                 </Button>
-                <Button size="sm" disabled={approve.isPending} onClick={() => approve.mutate(selected.id)}>
+                <Button size="sm" onClick={() => setApproveConfirmOpen(true)}>
                   Approve
                 </Button>
               </div>
@@ -343,6 +347,17 @@ export function AdminVehiclesPage() {
         onConfirm={(reason) => rejectDialog.target && reject.mutate({ vehicleId: rejectDialog.target, reason: reason! })}
         onCancel={rejectDialog.close}
         error={reject.isError ? friendlyErrorMessage(reject.error) : null}
+      />
+
+      <ConfirmDialog
+        open={approveConfirmOpen}
+        title="Approve this vehicle listing?"
+        description="It goes live for renters to book immediately (unless the owner is over their free slot limit, in which case it's paused until they free up a slot)."
+        confirmLabel="Approve"
+        pending={approve.isPending}
+        onConfirm={() => selected && approve.mutate(selected.id)}
+        onCancel={() => setApproveConfirmOpen(false)}
+        error={approve.isError ? friendlyErrorMessage(approve.error) : null}
       />
     </div>
   );

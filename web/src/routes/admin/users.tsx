@@ -61,6 +61,7 @@ async function fetchOwnerVehicles(ownerId: string) {
 const IMAGE_KEYS: (keyof VerificationSubmission)[] = [
   'license_front_path',
   'license_back_path',
+  'driver_license_qr_path',
   'secondary_id_front_path',
   'secondary_id_back_path',
   'selfie_with_id_path',
@@ -102,6 +103,7 @@ export function AdminUsersPage() {
   const [verificationFilter, setVerificationFilter] = useState<string[]>([]);
   const [accountFilter, setAccountFilter] = useState<string[]>([]);
   const [notesDraft, setNotesDraft] = useState('');
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
   const rejectDialog = useConfirmTarget<string>();
 
   const { data: users } = useQuery({ queryKey: ['admin-users'], queryFn: fetchUsers });
@@ -138,7 +140,12 @@ export function AdminUsersPage() {
     const sub = await fetchLatestSubmission(user.id);
     if (sub) {
       const urls: Record<string, string> = {};
-      for (const key of IMAGE_KEYS) urls[key] = await signedUrl('user-verification', sub[key] as string);
+      // driver_license_qr_path is nullable -- submissions from before this
+      // field existed won't have one, and signedUrl() would throw on a null path.
+      for (const key of IMAGE_KEYS) {
+        const path = sub[key] as string | null;
+        if (path) urls[key] = await signedUrl('user-verification', path);
+      }
       setImageUrls(urls);
     }
   }
@@ -171,7 +178,10 @@ export function AdminUsersPage() {
       });
       if (error) throw error;
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      setApproveConfirmOpen(false);
+    },
   });
   const reject = useMutation({
     mutationFn: async (vars: { submissionId: string; reason: string }) => {
@@ -306,6 +316,18 @@ export function AdminUsersPage() {
                     </a>
                   ))}
                 </div>
+                {submission.driver_license_qr_path ? (
+                  <p className="mb-3 text-xs text-muted">
+                    Decoded QR content:{' '}
+                    {submission.qr_decoded_content ? (
+                      <a href={submission.qr_decoded_content} target="_blank" rel="noreferrer" className="break-all font-semibold text-accent hover:underline">
+                        {submission.qr_decoded_content}
+                      </a>
+                    ) : (
+                      <span className="italic">not yet decoded / unreadable</span>
+                    )}
+                  </p>
+                ) : null}
                 {submission.license_ocr_findings || submission.liveness_flag ? (
                   <div className="mb-4 flex flex-wrap gap-1.5">
                     {submission.license_ocr_findings ? (
@@ -323,22 +345,11 @@ export function AdminUsersPage() {
                     <Button variant="danger" size="sm" onClick={() => rejectDialog.open(submission.id)}>
                       Reject
                     </Button>
-                    <Button
-                      size="sm"
-                      disabled={approve.isPending}
-                      onClick={() =>
-                        approve.mutate({
-                          submissionId: submission.id,
-                          profileId: selected.id,
-                          selfieFacePath: submission.selfie_face_path,
-                        })
-                      }
-                    >
-                      {approve.isPending ? 'Approving…' : 'Approve'}
+                    <Button size="sm" onClick={() => setApproveConfirmOpen(true)}>
+                      Approve
                     </Button>
                   </div>
                 ) : null}
-                {approve.isError ? <p className="mb-3 text-xs text-bad">{friendlyErrorMessage(approve.error)}</p> : null}
               </>
             ) : (
               <p className="mb-4 text-sm text-muted">No verification submission on file yet.</p>
@@ -442,6 +453,25 @@ export function AdminUsersPage() {
         onConfirm={(reason) => rejectDialog.target && reject.mutate({ submissionId: rejectDialog.target, reason: reason! })}
         onCancel={rejectDialog.close}
         error={reject.isError ? friendlyErrorMessage(reject.error) : null}
+      />
+
+      <ConfirmDialog
+        open={approveConfirmOpen}
+        title="Approve this verification?"
+        description="The user will be marked verified immediately and able to book and list vehicles."
+        confirmLabel="Approve"
+        pending={approve.isPending}
+        onConfirm={() =>
+          submission &&
+          selected &&
+          approve.mutate({
+            submissionId: submission.id,
+            profileId: selected.id,
+            selfieFacePath: submission.selfie_face_path,
+          })
+        }
+        onCancel={() => setApproveConfirmOpen(false)}
+        error={approve.isError ? friendlyErrorMessage(approve.error) : null}
       />
     </div>
   );

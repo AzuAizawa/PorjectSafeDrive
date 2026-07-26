@@ -89,6 +89,7 @@ export function MyBookingsPage() {
   const [chatOpenId, setChatOpenId] = useState<string | null>(null);
   const [paymentsOpenId, setPaymentsOpenId] = useState<string | null>(null);
   const [tab, setTab] = useState<'active' | 'history'>('active');
+  const [payConfirm, setPayConfirm] = useState<{ bookingId: string; paymentType: 'downpayment' | 'balance' } | null>(null);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings', 'mine', profile?.id],
@@ -264,21 +265,13 @@ export function MyBookingsPage() {
 
               <div className="mt-3.5 flex flex-wrap gap-2">
                 {b.status === 'pending_payment' ? (
-                  <Button
-                    size="sm"
-                    disabled={pay.isPending}
-                    onClick={() => pay.mutate({ bookingId: b.id, paymentType: 'downpayment' })}
-                  >
-                    {pay.isPending && pay.variables?.bookingId === b.id ? 'Redirecting…' : 'Pay Downpayment'}
+                  <Button size="sm" onClick={() => setPayConfirm({ bookingId: b.id, paymentType: 'downpayment' })}>
+                    Pay Downpayment
                   </Button>
                 ) : null}
                 {b.status === 'downpayment_paid' ? (
-                  <Button
-                    size="sm"
-                    disabled={pay.isPending}
-                    onClick={() => pay.mutate({ bookingId: b.id, paymentType: 'balance' })}
-                  >
-                    {pay.isPending && pay.variables?.bookingId === b.id ? 'Redirecting…' : 'Pay Balance'}
+                  <Button size="sm" onClick={() => setPayConfirm({ bookingId: b.id, paymentType: 'balance' })}>
+                    Pay Balance
                   </Button>
                 ) : null}
                 {['pending_owner', 'pending_payment', 'downpayment_paid', 'fully_paid'].includes(b.status) ? (
@@ -335,9 +328,6 @@ export function MyBookingsPage() {
                   </Button>
                 ) : null}
               </div>
-              {pay.isError && pay.variables?.bookingId === b.id ? (
-                <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(pay.error)}</p>
-              ) : null}
               {paymentsOpenId === b.id ? (
                 <div className="mt-3 rounded-lg border border-line bg-surface-2 p-3.5">
                   <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Payment Details</h4>
@@ -387,6 +377,17 @@ export function MyBookingsPage() {
         onConfirm={() => cancelDialog.target && cancel.mutate(cancelDialog.target)}
         onCancel={cancelDialog.close}
         error={cancel.isError ? friendlyErrorMessage(cancel.error) : null}
+      />
+
+      <ConfirmDialog
+        open={!!payConfirm}
+        title={payConfirm?.paymentType === 'balance' ? 'Pay the remaining balance?' : 'Pay the downpayment?'}
+        description="You'll be redirected to PayMongo's secure checkout to complete this payment."
+        confirmLabel="Continue to Payment"
+        pending={pay.isPending}
+        onConfirm={() => payConfirm && pay.mutate(payConfirm)}
+        onCancel={() => setPayConfirm(null)}
+        error={pay.isError ? friendlyErrorMessage(pay.error) : null}
       />
 
       <ReportIssueDialog

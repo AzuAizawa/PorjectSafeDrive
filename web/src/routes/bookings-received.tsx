@@ -78,6 +78,9 @@ export function BookingsReceivedPage() {
   const declineDialog = useConfirmTarget<string>();
   const noShowDialog = useConfirmTarget<string>();
   const rateDialog = useConfirmTarget<string>();
+  const acceptDialog = useConfirmTarget<string>();
+  const handoverDialog = useConfirmTarget<string>();
+  const completeDialog = useConfirmTarget<string>();
   const [chatOpenId, setChatOpenId] = useState<string | null>(null);
   const [payoutsOpenId, setPayoutsOpenId] = useState<string | null>(null);
   const [tab, setTab] = useState<'active' | 'history'>('active');
@@ -131,20 +134,23 @@ export function BookingsReceivedPage() {
     queryClient.invalidateQueries({ queryKey: ['bookings'] });
   };
 
-  function useRpcMutation(fn: string) {
+  function useRpcMutation(fn: string, onDone?: () => void) {
     return useMutation({
       mutationFn: async (bookingId: string) => {
         const { error } = await supabase.rpc(fn, { p_booking_id: bookingId });
         if (error) throw error;
       },
-      onSuccess: invalidate,
+      onSuccess: () => {
+        invalidate();
+        onDone?.();
+      },
       onError: (e) => setActionError(friendlyErrorMessage(e)),
     });
   }
 
-  const accept = useRpcMutation('accept_booking');
-  const confirmHandover = useRpcMutation('confirm_handover');
-  const markComplete = useRpcMutation('mark_complete');
+  const accept = useRpcMutation('accept_booking', acceptDialog.close);
+  const confirmHandover = useRpcMutation('confirm_handover', handoverDialog.close);
+  const markComplete = useRpcMutation('mark_complete', completeDialog.close);
 
   const reject = useMutation({
     mutationFn: async (vars: { bookingId: string; reason: string }) => {
@@ -263,7 +269,7 @@ export function BookingsReceivedPage() {
             <div className="mt-3.5 flex items-center gap-2">
               {b.status === 'pending_owner' ? (
                 <>
-                  <Button size="sm" onClick={() => accept.mutate(b.id)}>Accept</Button>
+                  <Button size="sm" onClick={() => acceptDialog.open(b.id)}>Accept</Button>
                   <Button variant="danger" size="sm" onClick={() => declineDialog.open(b.id)}>Decline</Button>
                 </>
               ) : null}
@@ -272,7 +278,7 @@ export function BookingsReceivedPage() {
                 return (
                   <>
                     {b.status === 'fully_paid' ? (
-                      <Button size="sm" onClick={() => confirmHandover.mutate(b.id)}>Confirm Handover</Button>
+                      <Button size="sm" onClick={() => handoverDialog.open(b.id)}>Confirm Handover</Button>
                     ) : (
                       <Button size="sm" disabled title="Balance must be paid before handover can be confirmed">
                         Confirm Handover
@@ -291,7 +297,7 @@ export function BookingsReceivedPage() {
                 );
               })() : null}
               {b.status === 'active' ? (
-                <Button size="sm" onClick={() => markComplete.mutate(b.id)}>Confirm Return</Button>
+                <Button size="sm" onClick={() => completeDialog.open(b.id)}>Confirm Return</Button>
               ) : null}
               {b.status === 'completed' ? (
                 reviewedIds?.has(b.id) ? (
@@ -372,6 +378,39 @@ export function BookingsReceivedPage() {
         onConfirm={() => noShowDialog.target && cancelNoShow.mutate(noShowDialog.target)}
         onCancel={noShowDialog.close}
         error={cancelNoShow.isError ? friendlyErrorMessage(cancelNoShow.error) : null}
+      />
+
+      <ConfirmDialog
+        open={!!acceptDialog.target}
+        title="Accept this booking request?"
+        description="You're committing to have the vehicle available for these dates once the renter completes payment."
+        confirmLabel="Accept"
+        pending={accept.isPending}
+        onConfirm={() => acceptDialog.target && accept.mutate(acceptDialog.target)}
+        onCancel={acceptDialog.close}
+        error={accept.isError ? friendlyErrorMessage(accept.error) : null}
+      />
+
+      <ConfirmDialog
+        open={!!handoverDialog.target}
+        title="Confirm handover to the renter?"
+        description="Only confirm once you've verified their ID in person and handed over the vehicle — this can't be easily undone."
+        confirmLabel="Confirm Handover"
+        pending={confirmHandover.isPending}
+        onConfirm={() => handoverDialog.target && confirmHandover.mutate(handoverDialog.target)}
+        onCancel={handoverDialog.close}
+        error={confirmHandover.isError ? friendlyErrorMessage(confirmHandover.error) : null}
+      />
+
+      <ConfirmDialog
+        open={!!completeDialog.target}
+        title="Confirm the vehicle was returned?"
+        description="This marks the rental complete and starts the deposit-refund/payout process. Only confirm once you've actually gotten the vehicle back."
+        confirmLabel="Confirm Return"
+        pending={markComplete.isPending}
+        onConfirm={() => completeDialog.target && markComplete.mutate(completeDialog.target)}
+        onCancel={completeDialog.close}
+        error={markComplete.isError ? friendlyErrorMessage(markComplete.error) : null}
       />
 
       <RateBookingDialog

@@ -14,6 +14,10 @@
 // false result -- this must never surface as a hard error to the caller.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import exifr from 'npm:exifr@7.1.3';
+import jpeg from 'npm:jpeg-js@0.4.4';
+import { PNG } from 'npm:pngjs@7.0.0';
+import jsQR from 'npm:jsqr@1.4.0';
+import { Buffer } from 'node:buffer';
 
 const GOOGLE_CLOUD_VISION_API_KEY = Deno.env.get('GOOGLE_CLOUD_VISION_API_KEY')!;
 
@@ -117,11 +121,40 @@ function matchExpiryInText(expiryDate: string, ocrText: string): boolean | null 
   return false;
 }
 
+// Decodes a QR code from a plain image (no external calls -- purely local
+// pixel decoding). Returns whatever raw text the QR encodes (for the PH
+// digital driver's license this is a portal.lto.gov.ph URL, confirmed
+// against a real sample), or null if no QR was found/decodable. This is
+// deliberately not followed up with a server-side fetch of that URL -- see
+// 061_driver_license_qr.sql for why.
+function decodeQr(buffer: ArrayBuffer, mimeType: string): string | null {
+  try {
+    let width: number;
+    let height: number;
+    let data: Uint8ClampedArray;
+    if (mimeType === 'image/png') {
+      const png = PNG.sync.read(Buffer.from(buffer));
+      width = png.width;
+      height = png.height;
+      data = new Uint8ClampedArray(png.data.buffer, png.data.byteOffset, png.data.byteLength);
+    } else {
+      const decoded = jpeg.decode(new Uint8Array(buffer), { useTArray: true });
+      width = decoded.width;
+      height = decoded.height;
+      data = new Uint8ClampedArray(decoded.data.buffer, decoded.data.byteOffset, decoded.data.byteLength);
+    }
+    const result = jsQR(data, width, height);
+    return result?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
   const body = await req.json().catch(() => null);
-  const { entity_type, entity_id, bucket, path, expected_name, plate_number, orcr_expiry_date } = body ?? {};
+  const { entity_type, entity_id, bucket, path, expected_name, plate_number, orcr_expiry_date, qr_path } = body ?? {};
   if (!entity_type || !entity_id || !bucket || !path) {
     return new Response(JSON.stringify({ error: 'entity_type, entity_id, bucket, path required' }), { status: 400 });
   }
@@ -189,8 +222,20 @@ Deno.serve(async (req) => {
       if (orcr_expiry_date) findings.expiry_match = matchExpiryInText(orcr_expiry_date, ocrText);
     }
 
+    let qrDecodedContent: string | null = null;
+    if (entity_type === 'verification' && qr_path) {
+      const { data: qrBlob } = await supabase.storage.from(bucket).download(qr_path);
+      if (qrBlob) {
+        const qrBuffer = await qrBlob.arrayBuffer();
+        qrDecodedContent = decodeQr(qrBuffer, qrBlob.type);
+      }
+    }
+
     if (entity_type === 'verification') {
-      await supabase.from('verification_submissions').update({ license_ocr_findings: findings }).eq('id', entity_id);
+      await supabase
+        .from('verification_submissions')
+        .update({ license_ocr_findings: findings, qr_decoded_content: qrDecodedContent })
+        .eq('id', entity_id);
     } else if (entity_type === 'vehicle') {
       await supabase.from('vehicles').update({ orcr_ocr_findings: findings }).eq('id', entity_id);
     }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/pill';
 import { CameraCapture } from '@/components/camera-capture';
+import { QrConsentDialog } from '@/components/qr-consent-dialog';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 
 const SECONDARY_ID_TYPES = [
@@ -41,6 +42,7 @@ const DOCUMENT_FIELDS = [
   { key: 'license_back', label: "Driver's License — Back" },
   { key: 'secondary_id_front', label: 'Secondary ID — Front' },
   { key: 'secondary_id_back', label: 'Secondary ID — Back' },
+  { key: 'driver_license_qr', label: "Driver's License — QR Code" },
 ] as const;
 
 async function fetchLatestSubmission(profileId: string) {
@@ -64,7 +66,15 @@ export function VerifyPage() {
   const [selfieWithIdMotion, setSelfieWithIdMotion] = useState(true);
   const [selfieFaceMotion, setSelfieFaceMotion] = useState(true);
   const [consentGiven, setConsentGiven] = useState(false);
+  const [qrConsentGiven, setQrConsentGiven] = useState(false);
+  const [qrConsentModalOpen, setQrConsentModalOpen] = useState(false);
+  const qrFileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function openQrPicker() {
+    if (qrConsentGiven) qrFileInputRef.current?.click();
+    else setQrConsentModalOpen(true);
+  }
 
   const { data: latest } = useQuery({
     queryKey: ['verification', profile?.id],
@@ -113,6 +123,7 @@ export function VerifyPage() {
         p_license_back_path: paths.license_back,
         p_secondary_id_front_path: paths.secondary_id_front,
         p_secondary_id_back_path: paths.secondary_id_back,
+        p_driver_license_qr_path: paths.driver_license_qr,
         p_selfie_with_id_path: paths.selfie_with_id,
         p_selfie_face_path: paths.selfie_face,
         p_liveness_flag: !selfieWithIdMotion || !selfieFaceMotion,
@@ -188,22 +199,54 @@ export function VerifyPage() {
           <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Required documents (JPG/PNG, max 5MB)</p>
             <div className="grid grid-cols-2 gap-2">
-              {DOCUMENT_FIELDS.map((f) => (
-                <label
-                  key={f.key}
-                  className="cursor-pointer rounded-xl border-2 border-dashed border-line bg-surface-2/70 p-4 text-center text-xs font-semibold text-muted backdrop-blur-sm hover:border-accent hover:text-accent hover:bg-accent-soft/40 hover:-translate-y-px hover:shadow-[0_8px_20px_-12px_rgba(var(--shadow-tint),0.4)]"
-                >
-                  📄 {documents[f.key]?.name ?? f.label}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png"
-                    className="hidden"
-                    onChange={(e) => setDocuments((prev) => ({ ...prev, [f.key]: e.target.files?.[0] ?? null }))}
-                  />
-                </label>
-              ))}
+              {DOCUMENT_FIELDS.map((f) =>
+                f.key === 'driver_license_qr' ? (
+                  <div
+                    key={f.key}
+                    role="button"
+                    tabIndex={0}
+                    className="cursor-pointer rounded-xl border-2 border-dashed border-line bg-surface-2/70 p-4 text-center text-xs font-semibold text-muted backdrop-blur-sm hover:border-accent hover:text-accent hover:bg-accent-soft/40 hover:-translate-y-px hover:shadow-[0_8px_20px_-12px_rgba(var(--shadow-tint),0.4)]"
+                    onClick={openQrPicker}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') openQrPicker();
+                    }}
+                  >
+                    📄 {documents[f.key]?.name ?? f.label}
+                    <input
+                      ref={qrFileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      className="hidden"
+                      onChange={(e) => setDocuments((prev) => ({ ...prev, [f.key]: e.target.files?.[0] ?? null }))}
+                    />
+                  </div>
+                ) : (
+                  <label
+                    key={f.key}
+                    className="cursor-pointer rounded-xl border-2 border-dashed border-line bg-surface-2/70 p-4 text-center text-xs font-semibold text-muted backdrop-blur-sm hover:border-accent hover:text-accent hover:bg-accent-soft/40 hover:-translate-y-px hover:shadow-[0_8px_20px_-12px_rgba(var(--shadow-tint),0.4)]"
+                  >
+                    📄 {documents[f.key]?.name ?? f.label}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      className="hidden"
+                      onChange={(e) => setDocuments((prev) => ({ ...prev, [f.key]: e.target.files?.[0] ?? null }))}
+                    />
+                  </label>
+                )
+              )}
             </div>
           </div>
+
+          <QrConsentDialog
+            open={qrConsentModalOpen}
+            onAccept={() => {
+              setQrConsentGiven(true);
+              setQrConsentModalOpen(false);
+              qrFileInputRef.current?.click();
+            }}
+            onCancel={() => setQrConsentModalOpen(false)}
+          />
 
           <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">

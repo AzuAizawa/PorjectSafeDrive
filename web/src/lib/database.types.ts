@@ -81,6 +81,8 @@ export interface VerificationSubmission {
   secondary_id_back_path: string;
   selfie_with_id_path: string;
   selfie_face_path: string;
+  driver_license_qr_path: string | null;
+  qr_decoded_content: string | null;
   status: 'pending' | 'verified' | 'rejected';
   rejection_reason: string | null;
   ban_evasion_flag: boolean;
