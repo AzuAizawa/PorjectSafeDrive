@@ -61,6 +61,8 @@ export function VerifyPage() {
   const [documents, setDocuments] = useState<Record<string, File | null>>({});
   const [selfieWithId, setSelfieWithId] = useState<File | null>(null);
   const [selfieFace, setSelfieFace] = useState<File | null>(null);
+  const [selfieWithIdMotion, setSelfieWithIdMotion] = useState(true);
+  const [selfieFaceMotion, setSelfieFaceMotion] = useState(true);
   const [consentGiven, setConsentGiven] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,6 +115,7 @@ export function VerifyPage() {
         p_secondary_id_back_path: paths.secondary_id_back,
         p_selfie_with_id_path: paths.selfie_with_id,
         p_selfie_face_path: paths.selfie_face,
+        p_liveness_flag: !selfieWithIdMotion || !selfieFaceMotion,
       });
       if (submitError) throw submitError;
     },
@@ -207,8 +210,22 @@ export function VerifyPage() {
               Live selfies (taken with your camera — not uploaded from a file)
             </p>
             <div className="grid grid-cols-2 gap-3">
-              <CameraCapture label="Selfie holding ID" captured={selfieWithId} onCapture={setSelfieWithId} />
-              <CameraCapture label="Selfie (face only)" captured={selfieFace} onCapture={setSelfieFace} />
+              <CameraCapture
+                label="Selfie holding ID"
+                captured={selfieWithId}
+                onCapture={(file, motionDetected) => {
+                  setSelfieWithId(file);
+                  setSelfieWithIdMotion(motionDetected);
+                }}
+              />
+              <CameraCapture
+                label="Selfie (face only)"
+                captured={selfieFace}
+                onCapture={(file, motionDetected) => {
+                  setSelfieFace(file);
+                  setSelfieFaceMotion(motionDetected);
+                }}
+              />
             </div>
           </div>
 

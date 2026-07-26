@@ -13,7 +13,7 @@ import { MultiSelectDropdown } from '@/components/ui/multi-select-dropdown';
 import { formatDate } from '@/lib/utils';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 import { orcrExpiryStatus } from '@/lib/vehicle-expiry';
-import type { CarBrand, CarModel, Profile, Vehicle, VerificationSubmission } from '@/lib/database.types';
+import type { CarBrand, CarModel, OcrFindings, Profile, Vehicle, VerificationSubmission } from '@/lib/database.types';
 
 const VERIFICATION_OPTIONS = [
   { value: 'unverified', label: 'Unverified' },
@@ -84,6 +84,12 @@ function vehicleApprovalPill(v: Vehicle) {
   if (v.approval_status === 'pending') return <Pill tone="warn">Pending</Pill>;
   if (v.approval_status === 'rejected') return <Pill tone="bad">Rejected</Pill>;
   return <Pill tone="good">Approved</Pill>;
+}
+
+function nameMatchPill(status: OcrFindings['name_match']) {
+  if (status === 'match') return <Pill tone="good">✅ Name matches ID</Pill>;
+  if (status === 'possible_mismatch') return <Pill tone="warn">⚠ Name not found on ID</Pill>;
+  return <Pill tone="muted">Couldn't read ID text</Pill>;
 }
 
 export function AdminUsersPage() {
@@ -300,6 +306,18 @@ export function AdminUsersPage() {
                     </a>
                   ))}
                 </div>
+                {submission.license_ocr_findings || submission.liveness_flag ? (
+                  <div className="mb-4 flex flex-wrap gap-1.5">
+                    {submission.license_ocr_findings ? (
+                      <>
+                        {nameMatchPill(submission.license_ocr_findings.name_match)}
+                        {submission.license_ocr_findings.duplicate_of ? <Pill tone="bad">⚠ Reused document image</Pill> : null}
+                        {submission.license_ocr_findings.suspicious_metadata ? <Pill tone="warn">⚠ Unusual file metadata</Pill> : null}
+                      </>
+                    ) : null}
+                    {submission.liveness_flag ? <Pill tone="warn">⚠ Low motion during selfie capture</Pill> : null}
+                  </div>
+                ) : null}
                 {selected.verified_status === 'pending' ? (
                   <div className="mb-4 flex justify-end gap-2">
                     <Button variant="danger" size="sm" onClick={() => rejectDialog.open(submission.id)}>

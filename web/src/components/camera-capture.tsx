@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 
 interface CameraCaptureProps {
   label: string;
-  onCapture: (file: File) => void;
+  onCapture: (file: File, motionDetected: boolean) => void;
   captured: File | null;
 }
 
@@ -16,6 +16,18 @@ export function CameraCapture({ label, onCapture, captured }: CameraCaptureProps
   const [active, setActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // Soft anti-replay signal, not real biometric liveness detection (that's
+  // a paid-SDK problem): samples downscaled frames while the camera is live
+  // and flags whether *any* natural frame-to-frame motion was seen. A
+  // printed photo or a phone/screen held dead-still in front of the camera
+  // shows ~zero pixel variance; a real face never holds perfectly still.
+  // Deliberately never blocks Capture — just tags the resulting file so
+  // admin can see a low-motion warning, since lighting/stillness can cause
+  // false positives.
+  const motionDetectedRef = useRef(false);
+  const lastFrameRef = useRef<Uint8ClampedArray | null>(null);
+  const motionIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => stopCamera();
@@ -31,8 +43,38 @@ export function CameraCapture({ label, onCapture, captured }: CameraCaptureProps
   useEffect(() => {
     if (active && videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
+      startMotionSampling();
     }
+    return () => stopMotionSampling();
   }, [active]);
+
+  function startMotionSampling() {
+    motionDetectedRef.current = false;
+    lastFrameRef.current = null;
+    const sampleCanvas = document.createElement('canvas');
+    sampleCanvas.width = 32;
+    sampleCanvas.height = 32;
+    const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+    motionIntervalRef.current = window.setInterval(() => {
+      const video = videoRef.current;
+      if (!video || !ctx || video.videoWidth === 0) return;
+      ctx.drawImage(video, 0, 0, 32, 32);
+      const frame = ctx.getImageData(0, 0, 32, 32).data;
+      if (lastFrameRef.current) {
+        let diff = 0;
+        for (let i = 0; i < frame.length; i += 4) diff += Math.abs(frame[i] - lastFrameRef.current[i]);
+        if (diff / (frame.length / 4) > 3) motionDetectedRef.current = true;
+      }
+      lastFrameRef.current = frame;
+    }, 150);
+  }
+
+  function stopMotionSampling() {
+    if (motionIntervalRef.current !== null) {
+      window.clearInterval(motionIntervalRef.current);
+      motionIntervalRef.current = null;
+    }
+  }
 
   async function startCamera() {
     setError(null);
@@ -48,6 +90,7 @@ export function CameraCapture({ label, onCapture, captured }: CameraCaptureProps
   function stopCamera() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    stopMotionSampling();
     setActive(false);
   }
 
@@ -58,6 +101,7 @@ export function CameraCapture({ label, onCapture, captured }: CameraCaptureProps
       return;
     }
     setError(null);
+    const motionDetected = motionDetectedRef.current;
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -68,7 +112,7 @@ export function CameraCapture({ label, onCapture, captured }: CameraCaptureProps
         if (!blob) return;
         const file = new File([blob], `${label.toLowerCase().replace(/\s+/g, '-')}.jpg`, { type: 'image/jpeg' });
         setPreviewUrl(URL.createObjectURL(blob));
-        onCapture(file);
+        onCapture(file, motionDetected);
         stopCamera();
       },
       'image/jpeg',

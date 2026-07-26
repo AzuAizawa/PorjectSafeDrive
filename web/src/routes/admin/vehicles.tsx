@@ -12,7 +12,7 @@ import { formatCurrency } from '@/lib/utils';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 import { publicUrl } from '@/lib/storage';
 import { orcrExpiryStatus } from '@/lib/vehicle-expiry';
-import type { CarBrand, CarModel, ListingReport, Profile, Vehicle } from '@/lib/database.types';
+import type { CarBrand, CarModel, ListingReport, OcrFindings, Profile, Vehicle } from '@/lib/database.types';
 
 const APPROVAL_OPTIONS = [
   { value: 'pending', label: 'Pending' },
@@ -56,6 +56,12 @@ function statusPill(v: Vehicle) {
   if (v.approval_status === 'pending') return <Pill tone="warn">Pending</Pill>;
   if (v.approval_status === 'rejected') return <Pill tone="bad">Rejected</Pill>;
   return <Pill tone="good">Approved</Pill>;
+}
+
+function nameMatchPill(status: OcrFindings['name_match']) {
+  if (status === 'match') return <Pill tone="good">✅ Name matches ORCR</Pill>;
+  if (status === 'possible_mismatch') return <Pill tone="warn">⚠ Name not found on ORCR</Pill>;
+  return <Pill tone="muted">Couldn't read ORCR text</Pill>;
 }
 
 export function AdminVehiclesPage() {
@@ -272,6 +278,15 @@ export function AdminVehiclesPage() {
               <Pill tone={orcrExpiryStatus(selected.orcr_expiry_date).tone}>{orcrExpiryStatus(selected.orcr_expiry_date).label}</Pill>
             </div>
             <p className="mb-2 text-xs text-muted">Name on ORCR should match the owner's verified name above.</p>
+            {selected.orcr_ocr_findings ? (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {nameMatchPill(selected.orcr_ocr_findings.name_match)}
+                {selected.orcr_ocr_findings.duplicate_of ? <Pill tone="bad">⚠ Reused document image</Pill> : null}
+                {selected.orcr_ocr_findings.suspicious_metadata ? <Pill tone="warn">⚠ Unusual file metadata</Pill> : null}
+                {selected.orcr_ocr_findings.plate_match === false ? <Pill tone="warn">⚠ Plate number not found on document</Pill> : null}
+                {selected.orcr_ocr_findings.expiry_match === false ? <Pill tone="warn">⚠ Expiry date doesn't match</Pill> : null}
+              </div>
+            ) : null}
             {orcrUrl ? (
               <a href={orcrUrl} target="_blank" rel="noreferrer" className="mb-4 block rounded-md border border-line bg-surface-2 p-3 text-center text-xs font-semibold text-accent">
                 📄 View ORCR document

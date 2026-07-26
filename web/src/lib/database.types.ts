@@ -56,6 +56,14 @@ export interface RoleChangeRequest {
   created_at: string;
 }
 
+export interface OcrFindings {
+  name_match: 'match' | 'possible_mismatch' | 'unreadable';
+  duplicate_of: string | null;
+  suspicious_metadata: boolean;
+  plate_match?: boolean;
+  expiry_match?: boolean | null;
+}
+
 export interface VerificationSubmission {
   id: string;
   profile_id: string;
@@ -76,6 +84,8 @@ export interface VerificationSubmission {
   status: 'pending' | 'verified' | 'rejected';
   rejection_reason: string | null;
   ban_evasion_flag: boolean;
+  license_ocr_findings: OcrFindings | null;
+  liveness_flag: boolean;
   submitted_at: string;
   reviewed_at: string | null;
   reviewed_by: string | null;
@@ -112,6 +122,7 @@ export interface Vehicle {
   orcr_path: string | null;
   orcr_expiry_date: string | null;
   orcr_expiry_reminder_sent: boolean;
+  orcr_ocr_findings: OcrFindings | null;
   rental_agreement_path: string | null;
   requires_deposit: boolean;
   deposit_amount: number | null;
