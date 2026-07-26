@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { signedUrl } from '@/lib/storage';
@@ -11,7 +12,8 @@ import { ConfirmDialog, useConfirmTarget } from '@/components/ui/confirm-dialog'
 import { MultiSelectDropdown } from '@/components/ui/multi-select-dropdown';
 import { formatDate } from '@/lib/utils';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
-import type { Profile, VerificationSubmission } from '@/lib/database.types';
+import { orcrExpiryStatus } from '@/lib/vehicle-expiry';
+import type { CarBrand, CarModel, Profile, Vehicle, VerificationSubmission } from '@/lib/database.types';
 
 const VERIFICATION_OPTIONS = [
   { value: 'unverified', label: 'Unverified' },
@@ -44,6 +46,18 @@ async function fetchLatestSubmission(profileId: string) {
   return data as VerificationSubmission | null;
 }
 
+type OwnerVehicleRow = Vehicle & { model: CarModel & { brand: CarBrand } };
+
+async function fetchOwnerVehicles(ownerId: string) {
+  const { data, error } = await supabase
+    .from('vehicles')
+    .select('*, model:car_models(*, brand:car_brands(*))')
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data as unknown as OwnerVehicleRow[];
+}
+
 const IMAGE_KEYS: (keyof VerificationSubmission)[] = [
   'license_front_path',
   'license_back_path',
@@ -64,6 +78,12 @@ function accountPill(status: Profile['account_status']) {
   if (status === 'suspended') return <Pill tone="warn">Suspended</Pill>;
   if (status === 'banned') return <Pill tone="bad">Banned</Pill>;
   return null;
+}
+
+function vehicleApprovalPill(v: Vehicle) {
+  if (v.approval_status === 'pending') return <Pill tone="warn">Pending</Pill>;
+  if (v.approval_status === 'rejected') return <Pill tone="bad">Rejected</Pill>;
+  return <Pill tone="good">Approved</Pill>;
 }
 
 export function AdminUsersPage() {
@@ -94,6 +114,11 @@ export function AdminUsersPage() {
   const { data: submission } = useQuery({
     queryKey: ['verification-submission', selected?.id],
     queryFn: () => fetchLatestSubmission(selected!.id),
+    enabled: !!selected,
+  });
+  const { data: ownerVehicles } = useQuery({
+    queryKey: ['admin-user-vehicles', selected?.id],
+    queryFn: () => fetchOwnerVehicles(selected!.id),
     enabled: !!selected,
   });
 
@@ -300,6 +325,35 @@ export function AdminUsersPage() {
             ) : (
               <p className="mb-4 text-sm text-muted">No verification submission on file yet.</p>
             )}
+
+            <div className="mb-4 border-t border-line pt-4">
+              <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Vehicles Listed</h4>
+              {ownerVehicles && ownerVehicles.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {ownerVehicles.map((v) => (
+                    <div key={v.id} className="flex items-center justify-between gap-2 rounded-md border border-line bg-surface-2 p-2.5 text-[13px]">
+                      <div>
+                        <div className="font-semibold">{v.model.brand.name} {v.model.name}</div>
+                        <div className="tabular text-xs text-muted">{v.plate_number}</div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          {vehicleApprovalPill(v)}
+                          {orcrExpiryStatus(v.orcr_expiry_date).tone === 'warn' || orcrExpiryStatus(v.orcr_expiry_date).tone === 'bad' ? (
+                            <Pill tone={orcrExpiryStatus(v.orcr_expiry_date).tone}>{orcrExpiryStatus(v.orcr_expiry_date).label}</Pill>
+                          ) : null}
+                        </div>
+                        <Link to={`/admin/vehicles?vehicle=${v.id}`}>
+                          <Button size="sm" variant="ghost">Review →</Button>
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted">No vehicles listed.</p>
+              )}
+            </div>
 
             <div className="border-t border-line pt-4">
               <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted">Account Standing</h4>

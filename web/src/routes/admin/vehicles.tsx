@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { signedUrl } from '@/lib/storage';
 import { Card } from '@/components/ui/card';
@@ -59,6 +60,7 @@ function statusPill(v: Vehicle) {
 
 export function AdminVehiclesPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selected, setSelected] = useState<VehicleRow | null>(null);
   const [orcrUrl, setOrcrUrl] = useState<string | null>(null);
   const rejectDialog = useConfirmTarget<string>();
@@ -86,6 +88,18 @@ export function AdminVehiclesPage() {
     setOrcrUrl(v.orcr_path ? await signedUrl('vehicle-documents', v.orcr_path) : null);
     setNotesDraft(v.admin_notes ?? '');
   }
+
+  // Deep-link support so a "Review" button elsewhere (e.g. Admin Users'
+  // vehicles-owned subsection) can land straight on a specific vehicle
+  // instead of just the general list.
+  useEffect(() => {
+    const vehicleId = searchParams.get('vehicle');
+    if (!vehicleId || !vehicles) return;
+    const match = vehicles.find((v) => v.id === vehicleId);
+    if (match) openReview(match);
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, vehicles]);
 
   const invalidate = () => {
     setActionError(null);

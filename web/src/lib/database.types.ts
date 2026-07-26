@@ -111,6 +111,7 @@ export interface Vehicle {
   owner_contact_number: string;
   orcr_path: string | null;
   orcr_expiry_date: string | null;
+  orcr_expiry_reminder_sent: boolean;
   rental_agreement_path: string | null;
   requires_deposit: boolean;
   deposit_amount: number | null;
