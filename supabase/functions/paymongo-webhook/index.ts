@@ -89,10 +89,13 @@ Deno.serve(async (req) => {
       });
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
     }
-  } else if (eventType === 'refund.updated') {
-    // resource here is the refund object itself: { id, attributes: { status } }.
-    // Only terminal statuses matter — 'pending'/'processing' don't change our
-    // own row, which process-refund already set to 'pending' at kickoff.
+  } else if (eventType === 'payment.refund.updated') {
+    // Confirmed against this account's actual webhook event list in the
+    // PayMongo dashboard — the real event name is payment.refund.updated,
+    // not the bare "refund.updated" web search results suggested. resource
+    // here is the refund object itself: { id, attributes: { status } }. Only
+    // terminal statuses matter — 'pending'/'processing' don't change our own
+    // row, which process-refund already set to 'pending' at kickoff.
     const refundId: string | undefined = resource?.id;
     const refundStatus: string | undefined = resource?.attributes?.status;
     if (refundId && (refundStatus === 'succeeded' || refundStatus === 'failed')) {
@@ -102,19 +105,19 @@ Deno.serve(async (req) => {
       });
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
     }
-  } else if (eventType === 'payout.paid' || eventType === 'payout.failed') {
-    // v2/batch_transfers is a newer, separate PayMongo product from the v1
-    // checkout/refund events above — its exact webhook payload shape isn't
-    // published in PayMongo's docs, so this is written defensively against
-    // the same general envelope the v1 events use and MUST be checked
-    // against a real test-mode payout's webhook delivery (visible in the
-    // PayMongo dashboard's event log) before being trusted. Unlike
-    // refund.updated, the event *type* itself already encodes success/
-    // failure, so no separate status field lookup is needed for that part.
+  } else if (eventType === 'transfer.outward.successful' || eventType === 'transfer.outward.failed') {
+    // Also confirmed against this account's actual event list — v2/batch_transfers
+    // disbursements fire transfer.outward.successful/failed, not "payout.paid"/
+    // "payout.failed" (that pair exists in this account but means PayMongo
+    // settling funds INTO the merchant's own bank account, the opposite
+    // direction from what we need). resource here is the transfer object
+    // (matches GET /v2/transfers/{id}'s shape: { id: "tr_...", ... }) — the
+    // event type itself already encodes success/failure, so no separate
+    // status field lookup is needed for that part.
     const transferId: string | undefined = resource?.id;
     const providerReferenceNumber: string | undefined =
       resource?.attributes?.provider_reference_number ?? resource?.provider_reference_number;
-    const payoutStatus = eventType === 'payout.paid' ? 'succeeded' : 'failed';
+    const payoutStatus = eventType === 'transfer.outward.successful' ? 'succeeded' : 'failed';
     if (transferId) {
       const { error } = await supabase.rpc('confirm_payout_result', {
         p_transfer_id: transferId,
