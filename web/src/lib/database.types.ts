@@ -166,6 +166,7 @@ export interface Booking {
   deposit_paid: boolean;
   deposit_paid_at: string | null;
   deposit_refunded: boolean;
+  invoice_number: string | null;
   status: BookingStatus;
   cancellation_reason: string | null;
   owner_response_deadline: string | null;

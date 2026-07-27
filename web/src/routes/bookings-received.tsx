@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { Inbox, CalendarClock, History } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
@@ -319,6 +320,11 @@ export function BookingsReceivedPage() {
                 >
                   🧾 {payoutsOpenId === b.id ? 'Hide Payment Details' : 'Payment Details'}
                 </Button>
+              ) : null}
+              {b.invoice_number ? (
+                <Link to={`/invoice/${b.id}`}>
+                  <Button variant="ghost" size="sm">📄 View Invoice</Button>
+                </Link>
               ) : null}
             </div>
             {payoutsOpenId === b.id ? (

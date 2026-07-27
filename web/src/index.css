@@ -189,6 +189,20 @@ h1, h2, h3, h4 {
     @apply bg-surface/75 backdrop-blur-xl;
     box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset;
   }
+}
+
+/* Hides the app chrome (topbar/sidebar, from AppShell.tsx's <header>/<aside>)
+   on any printed page — a printed invoice/agreement should just be the
+   document itself, not the surrounding nav. */
+@media print {
+  header,
+  aside {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
 
   .btn-gradient-accent {
     background-image: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));

@@ -32,6 +32,7 @@ function makeBooking(overrides: Partial<Booking> = {}): Booking {
     deposit_paid: false,
     deposit_paid_at: null,
     deposit_refunded: false,
+    invoice_number: null,
     status: 'pending_owner',
     cancellation_reason: null,
     owner_response_deadline: null,

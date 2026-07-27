@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CarFront, CalendarClock, History } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -326,6 +326,11 @@ export function MyBookingsPage() {
                   >
                     🧾 {paymentsOpenId === b.id ? 'Hide Payment Details' : 'Payment Details'}
                   </Button>
+                ) : null}
+                {b.invoice_number ? (
+                  <Link to={`/invoice/${b.id}`}>
+                    <Button variant="ghost" size="sm">📄 View Invoice</Button>
+                  </Link>
                 ) : null}
               </div>
               {paymentsOpenId === b.id ? (

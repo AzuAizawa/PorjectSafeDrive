@@ -6,6 +6,7 @@ import { ResetPasswordPage } from '@/routes/reset-password';
 import { BrowsePage } from '@/routes/browse';
 import { CarDetailPage } from '@/routes/car-detail';
 import { MyBookingsPage } from '@/routes/my-bookings';
+import { InvoicePage } from '@/routes/invoice';
 import { VerifyPage } from '@/routes/verify';
 import { ProfilePage } from '@/routes/profile';
 import { MyVehiclesPage } from '@/routes/my-vehicles';
@@ -93,6 +94,7 @@ export default function App() {
         <Route path="browse" element={<RequireRenter><BrowsePage /></RequireRenter>} />
         <Route path="cars/:id" element={<RequireRenter><CarDetailPage /></RequireRenter>} />
         <Route path="bookings" element={<RequireRenter><MyBookingsPage /></RequireRenter>} />
+        <Route path="invoice/:bookingId" element={<RequireRenter><InvoicePage /></RequireRenter>} />
         <Route path="verify" element={<RequireRenter><VerifyPage /></RequireRenter>} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="inquire" element={<InquirePage />} />
