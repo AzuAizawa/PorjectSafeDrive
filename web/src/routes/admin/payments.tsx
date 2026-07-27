@@ -42,8 +42,9 @@ async function fetchDuePayments() {
     .order('updated_at', { ascending: true });
   if (error) throw error;
 
-  const { data: payouts } = await supabase.from('payments').select('booking_id').eq('payment_type', 'payout');
-  const paidOutIds = new Set((payouts ?? []).map((p) => p.booking_id));
+  const { data: payouts } = await supabase.from('payments').select('booking_id, status').eq('payment_type', 'payout');
+  const paidOutIds = new Set((payouts ?? []).filter((p) => p.status === 'succeeded').map((p) => p.booking_id));
+  const payoutInProgressIds = new Set((payouts ?? []).filter((p) => p.status === 'pending').map((p) => p.booking_id));
 
   const { data: pendingRefunds } = await supabase
     .from('payments')
@@ -90,7 +91,8 @@ async function fetchDuePayments() {
   });
 
   return {
-    payoutsDue: all.filter((b) => !paidOutIds.has(b.id) && !disputedIds.has(b.id)),
+    payoutsDue: all.filter((b) => !paidOutIds.has(b.id) && !payoutInProgressIds.has(b.id) && !disputedIds.has(b.id)),
+    payoutsInProgress: all.filter((b) => payoutInProgressIds.has(b.id)),
     depositRefundsDue: depositEligible.filter((b) => !refundInProgressIds.has(b.id)),
     depositRefundsInProgress: depositEligible.filter((b) => refundInProgressIds.has(b.id)),
     cancellationRefundsDue,
@@ -109,6 +111,14 @@ export function AdminPaymentsPage() {
     mutationFn: async (bookingId: string) => {
       const { error } = await supabase.rpc('mark_payout_sent', { p_booking_id: bookingId });
       if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+  const sendPayout = useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { data, error } = await supabase.functions.invoke('process-payout', { body: { booking_id: bookingId } });
+      if (error) throw error;
+      return data;
     },
     onSuccess: invalidate,
   });
@@ -144,6 +154,9 @@ export function AdminPaymentsPage() {
       </div>
 
       <h3 className="mb-2 text-sm font-bold">Owner payouts due</h3>
+      {sendPayout.isError ? (
+        <p className="mb-2 rounded-md border border-bad bg-bad-soft p-3 text-sm text-bad">{friendlyErrorMessage(sendPayout.error)}</p>
+      ) : null}
       <div className="mb-6 rounded-2xl border border-line bg-surface">
         <table className="w-full border-collapse">
           <thead>
@@ -164,7 +177,20 @@ export function AdminPaymentsPage() {
                 <td className="tabular px-4 py-3">{formatCurrency(b.commission)}</td>
                 <td className="tabular px-4 py-3"><strong>{formatCurrency(b.base_price)}</strong></td>
                 <td className="px-4 py-3">
-                  <Button size="sm" disabled={markSent.isPending} onClick={() => markSent.mutate(b.id)}>Mark as Sent</Button>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      className="text-xs font-semibold text-muted underline hover:text-ink"
+                      disabled={markSent.isPending}
+                      onClick={() => confirm('Only use this if the payout was sent outside PayMongo.') && markSent.mutate(b.id)}
+                    >
+                      Mark as Sent
+                    </button>
+                    {b.owner.payout_method === 'gcash' ? (
+                      <Button size="sm" disabled={sendPayout.isPending} onClick={() => sendPayout.mutate(b.id)}>
+                        {sendPayout.isPending ? 'Sending…' : 'Send Payout via PayMongo'}
+                      </Button>
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -172,6 +198,32 @@ export function AdminPaymentsPage() {
         </table>
         {data?.payoutsDue.length === 0 ? <p className="p-6 text-center text-muted">Nothing due.</p> : null}
       </div>
+
+      {data && data.payoutsInProgress.length > 0 ? (
+        <>
+          <h3 className="mb-2 text-sm font-bold">Payouts in progress</h3>
+          <Card className="mb-6 p-0">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-muted-2">
+                  <th className="px-4 py-3">Vehicle</th><th className="px-4 py-3">Owner</th>
+                  <th className="px-4 py-3">Net payout</th><th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.payoutsInProgress.map((b) => (
+                  <tr key={b.id} className="border-t border-line text-[13.5px]">
+                    <td className="px-4 py-3 font-bold">{b.vehicle.model.brand.name} {b.vehicle.model.name}</td>
+                    <td className="px-4 py-3">{b.owner.first_name} {b.owner.last_name}</td>
+                    <td className="tabular px-4 py-3">{formatCurrency(b.base_price)}</td>
+                    <td className="px-4 py-3"><Pill tone="warn">Processing via PayMongo</Pill></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </>
+      ) : null}
 
       <h3 className="mb-2 text-sm font-bold">Deposit refunds due</h3>
       {sendRefund.isError ? (

@@ -102,6 +102,27 @@ Deno.serve(async (req) => {
       });
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
     }
+  } else if (eventType === 'payout.paid' || eventType === 'payout.failed') {
+    // v2/batch_transfers is a newer, separate PayMongo product from the v1
+    // checkout/refund events above — its exact webhook payload shape isn't
+    // published in PayMongo's docs, so this is written defensively against
+    // the same general envelope the v1 events use and MUST be checked
+    // against a real test-mode payout's webhook delivery (visible in the
+    // PayMongo dashboard's event log) before being trusted. Unlike
+    // refund.updated, the event *type* itself already encodes success/
+    // failure, so no separate status field lookup is needed for that part.
+    const transferId: string | undefined = resource?.id;
+    const providerReferenceNumber: string | undefined =
+      resource?.attributes?.provider_reference_number ?? resource?.provider_reference_number;
+    const payoutStatus = eventType === 'payout.paid' ? 'succeeded' : 'failed';
+    if (transferId) {
+      const { error } = await supabase.rpc('confirm_payout_result', {
+        p_transfer_id: transferId,
+        p_status: payoutStatus,
+        p_provider_reference_number: providerReferenceNumber ?? null,
+      });
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    }
   }
 
   // Always 200 on anything else (unhandled event types) so PayMongo doesn't retry forever.
