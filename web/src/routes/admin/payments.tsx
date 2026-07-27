@@ -13,6 +13,11 @@ type CompletedBooking = Booking & {
   vehicle: { model: CarModel & { brand: CarBrand } };
 };
 
+type CancelledBooking = Booking & {
+  renter: Pick<Profile, 'first_name' | 'last_name'>;
+  vehicle: { model: CarModel & { brand: CarBrand } };
+};
+
 function payoutDestination(owner: CompletedBooking['owner']) {
   if (owner.payout_method === 'gcash') {
     return owner.gcash_number ? `GCash ${owner.gcash_number}` : 'GCash — not set up';
@@ -52,10 +57,45 @@ async function fetchDuePayments() {
 
   const all = bookings as CompletedBooking[];
   const depositEligible = all.filter((b) => b.deposit_paid && !b.deposit_refunded && !disputedIds.has(b.id));
+
+  // Cancellation refunds -- cancel_booking() computes and inserts the owed
+  // amount immediately at cancellation time (unlike deposit refunds, which
+  // aren't recorded until an admin actually kicks one off), so "due" here
+  // means a pending row that has never been sent to PayMongo at all yet
+  // (paymongo_reference still null), separate from one already in flight.
+  const { data: cancelledBookings, error: cancelledError } = await supabase
+    .from('bookings')
+    .select(
+      `*, renter:profiles!bookings_renter_id_fkey(first_name, last_name),
+       vehicle:vehicles(model:car_models(*, brand:car_brands(*)))`
+    )
+    .in('status', ['cancelled_by_renter', 'cancelled_by_owner'])
+    .order('updated_at', { ascending: true });
+  if (cancelledError) throw cancelledError;
+
+  const cancelledIds = (cancelledBookings ?? []).map((b) => b.id);
+  const { data: cancellationRefundPayments } =
+    cancelledIds.length > 0
+      ? await supabase.from('payments').select('booking_id, amount, status, paymongo_reference').eq('payment_type', 'refund').in('booking_id', cancelledIds)
+      : { data: [] };
+  const refundByBooking = new Map((cancellationRefundPayments ?? []).map((p) => [p.booking_id, p]));
+
+  const cancellationRefundsDue = (cancelledBookings as CancelledBooking[] ?? []).filter((b) => {
+    const p = refundByBooking.get(b.id);
+    return p && p.status === 'pending' && !p.paymongo_reference && p.amount > 0;
+  });
+  const cancellationRefundsInProgress = (cancelledBookings as CancelledBooking[] ?? []).filter((b) => {
+    const p = refundByBooking.get(b.id);
+    return p && p.status === 'pending' && p.paymongo_reference;
+  });
+
   return {
     payoutsDue: all.filter((b) => !paidOutIds.has(b.id) && !disputedIds.has(b.id)),
     depositRefundsDue: depositEligible.filter((b) => !refundInProgressIds.has(b.id)),
     depositRefundsInProgress: depositEligible.filter((b) => refundInProgressIds.has(b.id)),
+    cancellationRefundsDue,
+    cancellationRefundsInProgress,
+    refundByBooking,
   };
 }
 
@@ -83,6 +123,13 @@ export function AdminPaymentsPage() {
   const markRefundedManually = useMutation({
     mutationFn: async (bookingId: string) => {
       const { error } = await supabase.rpc('mark_deposit_refunded', { p_booking_id: bookingId });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+  const markCancellationRefundSent = useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { error } = await supabase.rpc('mark_cancellation_refund_sent', { p_booking_id: bookingId });
       if (error) throw error;
     },
     onSuccess: invalidate,
@@ -182,6 +229,69 @@ export function AdminPaymentsPage() {
                     <td className="px-4 py-3 font-bold">{b.vehicle.model.brand.name} {b.vehicle.model.name}</td>
                     <td className="px-4 py-3">{b.renter.first_name} {b.renter.last_name}</td>
                     <td className="tabular px-4 py-3">{formatCurrency(b.deposit_amount)}</td>
+                    <td className="px-4 py-3"><Pill tone="warn">Processing via PayMongo</Pill></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </>
+      ) : null}
+
+      <h3 className="mb-2 mt-6 text-sm font-bold">Cancellation refunds due</h3>
+      <p className="mb-2 text-xs text-muted">Owed to the renter when a booking was cancelled after money had already been paid.</p>
+      <Card className="mb-6 p-0">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-muted-2">
+              <th className="px-4 py-3">Vehicle</th><th className="px-4 py-3">Renter</th>
+              <th className="px-4 py-3">Refund amount</th><th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {data?.cancellationRefundsDue.map((b) => (
+              <tr key={b.id} className="border-t border-line text-[13.5px]">
+                <td className="px-4 py-3 font-bold">{b.vehicle.model.brand.name} {b.vehicle.model.name}</td>
+                <td className="px-4 py-3">{b.renter.first_name} {b.renter.last_name}</td>
+                <td className="tabular px-4 py-3">{formatCurrency(data.refundByBooking.get(b.id)?.amount ?? 0)}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      className="text-xs font-semibold text-muted underline hover:text-ink"
+                      disabled={markCancellationRefundSent.isPending}
+                      onClick={() => confirm('Only use this if the refund was sent outside PayMongo.') && markCancellationRefundSent.mutate(b.id)}
+                    >
+                      Mark Sent Manually
+                    </button>
+                    <Button size="sm" disabled={sendRefund.isPending} onClick={() => sendRefund.mutate(b.id)}>
+                      {sendRefund.isPending ? 'Sending…' : 'Send Refund via PayMongo'}
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {data?.cancellationRefundsDue.length === 0 ? <p className="p-6 text-center text-muted">Nothing due.</p> : null}
+      </Card>
+
+      {data && data.cancellationRefundsInProgress.length > 0 ? (
+        <>
+          <h3 className="mb-2 text-sm font-bold">Cancellation refunds in progress</h3>
+          <Card className="p-0">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-muted-2">
+                  <th className="px-4 py-3">Vehicle</th><th className="px-4 py-3">Renter</th>
+                  <th className="px-4 py-3">Refund amount</th><th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.cancellationRefundsInProgress.map((b) => (
+                  <tr key={b.id} className="border-t border-line text-[13.5px]">
+                    <td className="px-4 py-3 font-bold">{b.vehicle.model.brand.name} {b.vehicle.model.name}</td>
+                    <td className="px-4 py-3">{b.renter.first_name} {b.renter.last_name}</td>
+                    <td className="tabular px-4 py-3">{formatCurrency(data.refundByBooking.get(b.id)?.amount ?? 0)}</td>
                     <td className="px-4 py-3"><Pill tone="warn">Processing via PayMongo</Pill></td>
                   </tr>
                 ))}

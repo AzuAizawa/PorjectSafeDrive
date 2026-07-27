@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     const refundId: string | undefined = resource?.id;
     const refundStatus: string | undefined = resource?.attributes?.status;
     if (refundId && (refundStatus === 'succeeded' || refundStatus === 'failed')) {
-      const { error } = await supabase.rpc('confirm_deposit_refund_result', {
+      const { error } = await supabase.rpc('confirm_refund_result', {
         p_paymongo_refund_id: refundId,
         p_status: refundStatus,
       });
