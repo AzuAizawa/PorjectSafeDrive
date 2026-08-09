@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { PasswordInput, passwordMeetsRules } from '@/components/password-input';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 
 type Mode = 'login' | 'signup' | 'forgot';
 
@@ -86,7 +87,7 @@ export function LoginPage() {
     if (authError) {
       setSubmitting(false);
       if (mode === 'login') void supabase.rpc('record_login_failure', { p_email: email });
-      setError(authError.message);
+      setError(friendlyErrorMessage(authError));
       return;
     }
     if (mode === 'signup') {

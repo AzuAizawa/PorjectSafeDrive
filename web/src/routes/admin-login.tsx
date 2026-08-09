@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { PasswordInput } from '@/components/password-input';
+import { friendlyErrorMessage } from '@/lib/friendly-error';
 
 // Staff-only entry point, separate from the consumer /login page per panel
 // feedback ("admin and user login should be different, so it's separated").
@@ -54,7 +55,7 @@ export function AdminLoginPage() {
     setSubmitting(false);
     if (authError) {
       void supabase.rpc('record_login_failure', { p_email: email });
-      setError(authError.message);
+      setError(friendlyErrorMessage(authError));
       return;
     }
 
