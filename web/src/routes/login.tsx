@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Car, ShieldCheck, IdCard, CreditCard } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { PasswordInput, passwordMeetsRules } from '@/components/password-input';
+import { MfaChallengeStep } from '@/components/mfa-challenge-step';
 
 type Mode = 'login' | 'signup' | 'forgot';
+
+const DEFAULT_OTP_COOLDOWN_SECONDS = 45;
 
 function formatRetryAfter(seconds: number) {
   const minutes = Math.ceil(seconds / 60);
@@ -26,46 +29,72 @@ export function LoginPage() {
   const [signupSent, setSignupSent] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
-  const [mfaCode, setMfaCode] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [usingRecoveryCode, setUsingRecoveryCode] = useState(false);
-  const [recoveryCode, setRecoveryCode] = useState('');
-  const [recoverySubmitting, setRecoverySubmitting] = useState(false);
 
-  async function handleRecoveryCodeSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setRecoverySubmitting(true);
-    const { error: fnError } = await supabase.functions.invoke('verify-recovery-code', { body: { code: recoveryCode } });
-    setRecoverySubmitting(false);
-    if (fnError) { setError('Invalid or already-used recovery code.'); return; }
-    // The lost factor was deleted server-side — nothing forces aal2 for a
-    // regular (non-staff) user, so just proceed in; they can re-enroll from
-    // Profile whenever they're ready.
+  // Mandatory email-code 2FA (065_email_otp.sql) — the baseline every
+  // account has from the moment it's created, since there's no native
+  // Supabase "email" MFA factor type to lean on (see the migration's
+  // comment). Only reached when the account has no verified TOTP factor;
+  // an upgraded account skips straight to MfaChallengeStep instead.
+  const [emailOtpPending, setEmailOtpPending] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [otpSubmitting, setOtpSubmitting] = useState(false);
+  const [otpResending, setOtpResending] = useState(false);
+  const [otpCooldownSetting, setOtpCooldownSetting] = useState(DEFAULT_OTP_COOLDOWN_SECONDS);
+
+  useEffect(() => {
+    if (!emailOtpPending) return;
+    supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', 'email_otp_resend_cooldown_seconds')
+      .single()
+      .then(({ data }) => {
+        const seconds = Number(data?.value);
+        if (Number.isFinite(seconds) && seconds > 0) setOtpCooldownSetting(seconds);
+      });
+  }, [emailOtpPending]);
+
+  // Ticking countdown for the Resend button — reschedules itself each
+  // second rather than a single setInterval, so it can't drift out of sync
+  // with otpCooldown being set directly (e.g. from the server's own
+  // retry_after_seconds when a resend is blocked).
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const timer = setTimeout(() => setOtpCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [otpCooldown]);
+
+  // Shared tail for every successful login path (password-only, TOTP
+  // step-up, recovery code, or email code) — logs the Security Log entry
+  // and lands on "/" so LandingRedirect (App.tsx) can route by role.
+  function finishLogin() {
     void supabase.rpc('record_login_event').then(({ error }) => {
       if (error) console.warn('record_login_event failed:', error);
     });
     navigate('/');
   }
 
-  async function handleMfaSubmit(e: React.FormEvent) {
+  async function handleOtpVerify(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setSubmitting(true);
-    const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId: mfaFactorId!, code: mfaCode });
-    setSubmitting(false);
+    setOtpSubmitting(true);
+    const { data: verified, error: verifyError } = await supabase.rpc('verify_email_otp', { p_code: otpCode });
+    setOtpSubmitting(false);
     if (verifyError) { setError(verifyError.message); return; }
-    // Fire-and-forget — Security Log entries are a nice-to-have, never a
-    // reason to delay or fail a real login. Still logged to the console on
-    // failure (not shown to the user) so a silent gap is at least
-    // discoverable in dev tools instead of leaving zero trace.
-    void supabase.rpc('record_login_event').then(({ error }) => {
-      if (error) console.warn('record_login_event failed:', error);
-    });
-    // Land on "/" rather than a hardcoded destination — the index route
-    // (LandingRedirect in App.tsx) sends staff and renters to different
-    // homes based on role once the profile finishes loading.
-    navigate('/');
+    if (!verified) { setError('Incorrect code. Please try again.'); return; }
+    finishLogin();
+  }
+
+  async function handleResendOtp() {
+    setError(null);
+    setOtpResending(true);
+    const { data, error: otpError } = await supabase.rpc('request_email_otp');
+    setOtpResending(false);
+    if (otpError) { setError(otpError.message); return; }
+    const status = data?.[0];
+    setOtpCooldown(status && !status.sent ? status.retry_after_seconds : otpCooldownSetting);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -125,29 +154,41 @@ export function LoginPage() {
       return;
     }
 
-    // Password check passed — see if this account has 2FA enrolled and
+    // Password check passed — see if this account has upgraded to TOTP and
     // still needs to step up to aal2 before the session is fully trusted.
     const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    setSubmitting(false);
     if (level && level.nextLevel === 'aal2' && level.currentLevel !== level.nextLevel) {
       const { data: factors } = await supabase.auth.mfa.listFactors();
       const totp = factors?.totp[0];
       if (totp) {
+        setSubmitting(false);
         setMfaFactorId(totp.id);
         return;
       }
     }
-    // Fire-and-forget — Security Log entries are a nice-to-have, never a
-    // reason to delay or fail a real login. Still logged to the console on
-    // failure (not shown to the user) so a silent gap is at least
-    // discoverable in dev tools instead of leaving zero trace.
-    void supabase.rpc('record_login_event').then(({ error }) => {
-      if (error) console.warn('record_login_event failed:', error);
-    });
-    // Land on "/" rather than a hardcoded destination — the index route
-    // (LandingRedirect in App.tsx) sends staff and renters to different
-    // homes based on role once the profile finishes loading.
-    navigate('/');
+
+    // Staff with no TOTP factor yet (freshly invited, or just reset via the
+    // Admin Users "Reset 2FA" tool) skip the email-code detour entirely —
+    // MandatoryMfaGate (inside AppShell) already owns the full staff
+    // enroll/challenge flow, and staff never use email-OTP as their factor.
+    const { data: authUser } = await supabase.auth.getUser();
+    if (authUser.user) {
+      const { data: prof } = await supabase.from('profiles').select('role').eq('id', authUser.user.id).single();
+      if (prof && ['admin', 'support', 'super_admin'].includes(prof.role)) {
+        finishLogin();
+        return;
+      }
+    }
+
+    // No TOTP factor — every other account has mandatory email-code 2FA as
+    // its baseline (065_email_otp.sql), whether this is a brand-new
+    // signup's very first login or a returning user who never upgraded.
+    const { data: otpStatus, error: otpError } = await supabase.rpc('request_email_otp');
+    setSubmitting(false);
+    if (otpError) { setError(otpError.message); return; }
+    const status = otpStatus?.[0];
+    setOtpCooldown(status && !status.sent ? status.retry_after_seconds : otpCooldownSetting);
+    setEmailOtpPending(true);
   }
 
   const done = signupSent || resetSent;
@@ -199,48 +240,29 @@ export function LoginPage() {
           SafeDrive
         </div>
 
-        {mfaFactorId && usingRecoveryCode ? (
-          <form onSubmit={handleRecoveryCodeSubmit} className="flex flex-col gap-3.5">
-            <p className="text-sm text-muted">Enter a backup code. This resets your 2FA — you can set up a new authenticator afterward from your Profile.</p>
-            <input
-              className="h-[38px] w-full rounded-md border border-line bg-surface px-3 uppercase"
-              placeholder="XXXXX-XXXXX"
-              autoFocus
-              value={recoveryCode}
-              onChange={(e) => setRecoveryCode(e.target.value)}
-            />
-            {error ? <p className="text-sm text-bad">{error}</p> : null}
-            <Button type="submit" block disabled={!recoveryCode || recoverySubmitting}>
-              {recoverySubmitting ? 'Checking…' : 'Use Backup Code'}
-            </Button>
-            <button
-              type="button"
-              className="text-xs font-semibold text-muted hover:text-ink"
-              onClick={() => { setUsingRecoveryCode(false); setError(null); }}
-            >
-              ← Back to authenticator code
-            </button>
-          </form>
-        ) : mfaFactorId ? (
-          <form onSubmit={handleMfaSubmit} className="flex flex-col gap-3.5">
-            <p className="text-sm text-muted">Enter the 6-digit code from your authenticator app.</p>
+        {mfaFactorId ? (
+          <MfaChallengeStep factorId={mfaFactorId} onSuccess={finishLogin} />
+        ) : emailOtpPending ? (
+          <form onSubmit={handleOtpVerify} className="flex flex-col gap-3.5">
+            <p className="text-sm text-muted">We emailed a 6-digit code to {email}. Enter it below to finish signing in.</p>
             <input
               className="h-[38px] w-full rounded-md border border-line bg-surface px-3"
               maxLength={6}
               autoFocus
-              value={mfaCode}
-              onChange={(e) => setMfaCode(e.target.value)}
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value)}
             />
             {error ? <p className="text-sm text-bad">{error}</p> : null}
-            <Button type="submit" block disabled={mfaCode.length !== 6 || submitting}>
-              {submitting ? 'Verifying…' : 'Verify'}
+            <Button type="submit" block disabled={otpCode.length !== 6 || otpSubmitting}>
+              {otpSubmitting ? 'Verifying…' : 'Verify'}
             </Button>
             <button
               type="button"
-              className="text-xs font-semibold text-muted hover:text-ink"
-              onClick={() => { setUsingRecoveryCode(true); setError(null); }}
+              className="text-xs font-semibold text-muted hover:text-ink disabled:opacity-50"
+              disabled={otpCooldown > 0 || otpResending}
+              onClick={handleResendOtp}
             >
-              Lost your authenticator? Use a backup code
+              {otpResending ? 'Sending…' : otpCooldown > 0 ? `Resend code (${otpCooldown}s)` : 'Resend code'}
             </button>
           </form>
         ) : signupSent ? (
@@ -319,7 +341,7 @@ export function LoginPage() {
           </form>
         )}
 
-        {!done && !mfaFactorId ? (
+        {!done && !mfaFactorId && !emailOtpPending ? (
           <button
             className="mt-4 w-full text-center text-xs font-semibold text-muted hover:text-ink"
             onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}

@@ -5,6 +5,7 @@
 // already passes as the Authorization header (Supabase's own gateway
 // verifies it before this code even runs), not a separate secret.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { renderEmailHtml } from '../_shared/email-template.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 
@@ -28,21 +29,6 @@ const SUBJECTS: Record<string, string> = {
   deposit_refunded: 'Deposit refund processed',
   deposit_refund_failed: 'Deposit refund issue',
 };
-
-function renderHtml(message: string) {
-  return `
-    <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-      <div style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; margin-bottom: 20px;">
-        <span style="display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: #0e7c6b; color: white; font-size: 11px;">SD</span>
-        SafeDrive
-      </div>
-      <p style="font-size: 14px; line-height: 1.6; color: #14191a;">${message}</p>
-      <p style="font-size: 12px; color: #82938f; margin-top: 24px;">
-        This is an automated notification from SafeDrive, a school capstone project.
-      </p>
-    </div>
-  `;
-}
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
@@ -73,7 +59,7 @@ Deno.serve(async (req) => {
       from: 'SafeDrive <onboarding@resend.dev>',
       to: [profile.email],
       subject,
-      html: renderHtml(message),
+      html: renderEmailHtml(message),
     }),
   });
 

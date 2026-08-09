@@ -104,6 +104,7 @@ export function AdminUsersPage() {
   const [accountFilter, setAccountFilter] = useState<string[]>([]);
   const [notesDraft, setNotesDraft] = useState('');
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+  const [resetMfaConfirmOpen, setResetMfaConfirmOpen] = useState(false);
   const rejectDialog = useConfirmTarget<string>();
 
   const { data: users } = useQuery({ queryKey: ['admin-users'], queryFn: fetchUsers });
@@ -206,6 +207,21 @@ export function AdminUsersPage() {
       if (error) throw error;
     },
     onSuccess: invalidate,
+  });
+  // Rescues a user stuck behind a lost authenticator app with no backup
+  // codes generated — previously there was no way back in for them at all
+  // (verify-recovery-code is self-service only, requires the user's own
+  // aal1 session). Deleting their TOTP factor doesn't strand them: every
+  // account also has mandatory email-code login as a baseline
+  // (065_email_otp.sql), so they simply fall back to that immediately.
+  const resetMfa = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.functions.invoke('admin-reset-mfa', {
+        body: { target_user_id: selected!.id },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => setResetMfaConfirmOpen(false),
   });
   const saveNotes = useMutation({
     mutationFn: async (notes: string) => {
@@ -414,6 +430,15 @@ export function AdminUsersPage() {
               )}
               {setStatus.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(setStatus.error)}</p> : null}
               {clearStrikes.isError ? <p className="mt-2 text-xs text-bad">{friendlyErrorMessage(clearStrikes.error)}</p> : null}
+
+              {isFullAdmin ? (
+                <div className="mt-3 flex items-center justify-between border-t border-line pt-3 text-sm">
+                  <span className="text-xs text-muted">Locked out of an authenticator app with no backup codes?</span>
+                  <Button size="sm" variant="secondary" onClick={() => setResetMfaConfirmOpen(true)}>
+                    Reset 2FA
+                  </Button>
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-4 border-t border-line pt-4">
@@ -472,6 +497,18 @@ export function AdminUsersPage() {
         }
         onCancel={() => setApproveConfirmOpen(false)}
         error={approve.isError ? friendlyErrorMessage(approve.error) : null}
+      />
+
+      <ConfirmDialog
+        open={resetMfaConfirmOpen}
+        title="Reset this user's two-factor authentication?"
+        description="Removes their authenticator app enrollment entirely. They'll fall back to the mandatory emailed login code and can set up a new authenticator afterward from Profile if they want. Use this when someone is locked out with no working backup codes."
+        confirmLabel="Reset 2FA"
+        confirmVariant="danger"
+        pending={resetMfa.isPending}
+        onConfirm={() => resetMfa.mutate()}
+        onCancel={() => setResetMfaConfirmOpen(false)}
+        error={resetMfa.isError ? friendlyErrorMessage(resetMfa.error) : null}
       />
     </div>
   );

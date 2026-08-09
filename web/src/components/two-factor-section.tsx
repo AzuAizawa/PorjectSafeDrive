@@ -11,9 +11,12 @@ async function fetchFactors() {
   return data.totp.filter((f) => f.status === 'verified');
 }
 
-// Supabase Auth's native TOTP MFA — opt-in for any user (not just admin),
-// enroll returns a ready-made QR code SVG so no client-side QR library
-// is needed.
+// Supabase Auth's native TOTP MFA — an optional stronger upgrade for any
+// user (not just admin/staff, who already require it). Every account now
+// gets a mandatory emailed code at login as its baseline (065_email_otp.sql,
+// login.tsx) since there's no opt-out of 2FA anymore; enrolling here just
+// swaps that baseline for a faster authenticator-app code. Enroll returns a
+// ready-made QR code SVG so no client-side QR library is needed.
 export function TwoFactorSection() {
   const { profile } = useAuth();
   const isStaff = profile?.role === 'admin' || profile?.role === 'support' || profile?.role === 'super_admin';
@@ -78,14 +81,15 @@ export function TwoFactorSection() {
     <Card className="mt-5 max-w-lg p-5">
       <h3 className="mb-1 text-sm font-bold">Two-Factor Authentication</h3>
       <p className="mb-3 text-xs text-muted">
-        Adds a 6-digit code from an authenticator app (Google Authenticator, Authy, etc.) on top of your password.
-        {isStaff ? ' Required for admin/support accounts and cannot be disabled while you have staff access.' : ''}
+        {isStaff
+          ? 'Required for admin/support accounts and cannot be disabled while you have staff access.'
+          : 'Every account already gets a 6-digit code emailed at login. Add an authenticator app (Google Authenticator, Authy, etc.) for a faster, stronger option instead.'}
       </p>
 
       {hasVerifiedFactor ? (
         <>
           <div className="flex items-center justify-between rounded-md bg-good-soft p-3 text-sm text-good">
-            <span>✓ Two-factor authentication is enabled.</span>
+            <span>✓ Authenticator app enabled — used instead of the emailed code at login.</span>
             {isStaff ? null : (
               <Button
                 size="sm"
@@ -144,7 +148,7 @@ export function TwoFactorSection() {
         </div>
       ) : (
         <Button variant="secondary" disabled={enroll.isPending} onClick={() => enroll.mutate()}>
-          {enroll.isPending ? 'Setting up…' : 'Enable Two-Factor Authentication'}
+          {enroll.isPending ? 'Setting up…' : 'Set Up Authenticator App'}
         </Button>
       )}
       {error && !enrolling ? <p className="mt-2 text-xs text-bad">{error}</p> : null}

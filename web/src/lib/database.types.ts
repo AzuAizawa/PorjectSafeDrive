@@ -40,6 +40,7 @@ export interface Profile {
   bank_account_number: string | null;
   gcash_number: string | null;
   admin_notes: string | null;
+  email_otp_verified: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import { AppShell } from '@/components/layout/AppShell';
 import { LoginPage } from '@/routes/login';
+import { AdminLoginPage } from '@/routes/admin-login';
 import { ResetPasswordPage } from '@/routes/reset-password';
 import { BrowsePage } from '@/routes/browse';
 import { CarDetailPage } from '@/routes/car-detail';
@@ -80,6 +81,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/admin-login" element={<AdminLoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
 
