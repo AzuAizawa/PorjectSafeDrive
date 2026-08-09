@@ -5,29 +5,13 @@ import { Card } from '@/components/ui/card';
 import { LineChart } from '@/components/charts/line-chart';
 import { SuggestionCard } from '@/components/charts/suggestion-card';
 import { AiInsights } from '@/components/charts/ai-insights';
+import { PeriodNav } from '@/components/charts/period-nav';
 import { HeatmapChart, type HeatmapCell } from '@/components/charts/heatmap-chart';
+import { periodRange, periodLabel, bucketByPeriod, type TrendGranularity } from '@/lib/trend-periods';
 import { formatCurrency } from '@/lib/utils';
 import type { Booking, CarBrand, CarModel, Vehicle } from '@/lib/database.types';
 
 type VehicleRow = Vehicle & { model: CarModel & { brand: CarBrand } };
-
-function weekKey(iso: string) {
-  const d = new Date(iso);
-  const day = d.getDay();
-  d.setDate(d.getDate() + ((day === 0 ? -6 : 1) - day));
-  return d.toISOString().slice(0, 10);
-}
-function weekLabel(key: string) {
-  return new Date(key).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
-}
-function monthKey(iso: string) {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-function monthLabel(key: string) {
-  const [y, m] = key.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('en-PH', { month: 'short', year: '2-digit' });
-}
 
 async function fetchListerAnalytics(ownerId: string) {
   const { data: vehicles, error: vErr } = await supabase
@@ -45,8 +29,6 @@ async function fetchListerAnalytics(ownerId: string) {
   const { data: reviews } = await supabase.from('reviews').select('rating').eq('reviewee_id', ownerId).eq('is_hidden', false);
   const overallRating = reviews && reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : null;
 
-  const revenueByWeek = new Map<string, number>();
-  const revenueByMonth = new Map<string, number>();
   const peakTimeCounts = new Map<string, number>();
   for (const b of bookings as Booking[]) {
     const day = new Date(`${b.start_date}T12:00:00`).getDay();
@@ -74,11 +56,6 @@ async function fetchListerAnalytics(ownerId: string) {
       : null;
     const daysSinceLastBooking = lastBooking ? Math.round((Date.now() - lastBooking) / 86_400_000) : null;
 
-    for (const b of completed) {
-      revenueByWeek.set(weekKey(b.created_at), (revenueByWeek.get(weekKey(b.created_at)) ?? 0) + Number(b.base_price));
-      revenueByMonth.set(monthKey(b.created_at), (revenueByMonth.get(monthKey(b.created_at)) ?? 0) + Number(b.base_price));
-    }
-
     let suggestion: { severity: 'info' | 'warn' | 'good'; text: string } | null = null;
     if (occupancy >= 70) {
       suggestion = { severity: 'good', text: 'High demand — consider raising your daily price.' };
@@ -97,21 +74,41 @@ async function fetchListerAnalytics(ownerId: string) {
     };
   });
 
-  const sortedWeeks = [...revenueByWeek.keys()].sort();
-  const revenueTrendWeekly = sortedWeeks.map((k) => ({ label: weekLabel(k), value: revenueByWeek.get(k)! }));
-  const sortedMonths = [...revenueByMonth.keys()].sort();
-  const revenueTrendMonthly = sortedMonths.map((k) => ({ label: monthLabel(k), value: revenueByMonth.get(k)! }));
+  return { perVehicle, vehicleIds, overallRating, peakTimes };
+}
 
-  return { perVehicle, revenueTrendWeekly, revenueTrendMonthly, overallRating, peakTimes };
+// Revenue trend for the currently-viewed period only, scoped to this
+// owner's vehicles — mirrors the admin drill-down but filtered to
+// status = completed since a lister only cares about revenue actually
+// earned, not requests that never went anywhere.
+async function fetchListerTrend(vehicleIds: string[], granularity: TrendGranularity, reference: Date) {
+  if (vehicleIds.length === 0) return { revenueTrend: bucketByPeriod<{ created_at: string; base_price: number }>([], (r) => r.created_at, (r) => r.base_price, granularity, reference) };
+
+  const { start, end } = periodRange(granularity, reference);
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('created_at, base_price')
+    .in('vehicle_id', vehicleIds)
+    .eq('status', 'completed')
+    .gte('created_at', start.toISOString())
+    .lt('created_at', end.toISOString());
+  if (error) throw error;
+
+  const rows = (data ?? []) as { created_at: string; base_price: number }[];
+  return { revenueTrend: bucketByPeriod(rows, (r) => r.created_at, (r) => Number(r.base_price), granularity, reference) };
 }
 
 export function ListerAnalyticsTab({ ownerId }: { ownerId: string }) {
   const { data } = useQuery({ queryKey: ['lister-analytics', ownerId], queryFn: () => fetchListerAnalytics(ownerId) });
-  const [granularity, setGranularity] = useState<'week' | 'month'>('week');
+  const [granularity, setGranularity] = useState<TrendGranularity>('week');
+  const [reference, setReference] = useState(() => new Date());
+  const { data: trend } = useQuery({
+    queryKey: ['lister-trend', ownerId, granularity, reference.toDateString(), data?.vehicleIds],
+    queryFn: () => fetchListerTrend(data!.vehicleIds, granularity, reference),
+    enabled: !!data,
+  });
 
   if (!data) return <p className="text-muted">Loading…</p>;
-
-  const revenueTrend = granularity === 'week' ? data.revenueTrendWeekly : data.revenueTrendMonthly;
 
   return (
     <div>
@@ -119,8 +116,8 @@ export function ListerAnalyticsTab({ ownerId }: { ownerId: string }) {
         role="lister"
         stats={{
           overallRating: data.overallRating,
-          revenueTrendByWeek: data.revenueTrendWeekly,
-          revenueTrendByMonth: data.revenueTrendMonthly,
+          selectedPeriod: { granularity, label: periodLabel(granularity, reference) },
+          revenueTrend: trend?.revenueTrend ?? [],
           vehicles: data.perVehicle.map((p) => ({
             model: `${p.vehicle.model.brand.name} ${p.vehicle.model.name}`,
             bookingsCount: p.bookingsCount,
@@ -140,27 +137,12 @@ export function ListerAnalyticsTab({ ownerId }: { ownerId: string }) {
       ) : null}
 
       <Card className="mb-5 p-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold">Revenue per {granularity} (completed bookings)</h3>
-          <div className="flex items-center gap-1.5">
-            <button
-              className={`rounded-md px-2.5 py-1 text-xs font-bold ${granularity === 'week' ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:text-ink'}`}
-              onClick={() => setGranularity('week')}
-            >
-              By week
-            </button>
-            <button
-              className={`rounded-md px-2.5 py-1 text-xs font-bold ${granularity === 'month' ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:text-ink'}`}
-              onClick={() => setGranularity('month')}
-            >
-              By month
-            </button>
-          </div>
-        </div>
-        {revenueTrend.length > 0 ? (
-          <LineChart data={revenueTrend} formatValue={(v) => formatCurrency(v)} />
+        <h3 className="mb-1 text-sm font-bold">Revenue (completed bookings)</h3>
+        <PeriodNav granularity={granularity} reference={reference} onGranularityChange={setGranularity} onReferenceChange={setReference} />
+        {trend && trend.revenueTrend.some((p) => p.value > 0) ? (
+          <LineChart data={trend.revenueTrend} formatValue={(v) => formatCurrency(v)} />
         ) : (
-          <p className="text-sm text-muted">No completed bookings yet.</p>
+          <p className="text-sm text-muted">No completed bookings in this period.</p>
         )}
       </Card>
 

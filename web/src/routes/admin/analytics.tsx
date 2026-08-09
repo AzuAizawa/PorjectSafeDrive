@@ -8,49 +8,22 @@ import { FunnelChart } from '@/components/charts/funnel-chart';
 import { HeatmapChart, type HeatmapCell } from '@/components/charts/heatmap-chart';
 import { SuggestionCard } from '@/components/charts/suggestion-card';
 import { AiInsights } from '@/components/charts/ai-insights';
+import { PeriodNav } from '@/components/charts/period-nav';
+import { periodRange, periodLabel, bucketByPeriod, type TrendGranularity } from '@/lib/trend-periods';
 import { formatCurrency } from '@/lib/utils';
 
-function weekStartLabel(iso: string) {
-  const d = new Date(iso);
-  const day = d.getDay();
-  const diff = (day === 0 ? -6 : 1) - day; // back up to Monday
-  d.setDate(d.getDate() + diff);
-  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
-}
-function weekKey(iso: string) {
-  const d = new Date(iso);
-  const day = d.getDay();
-  const diff = (day === 0 ? -6 : 1) - day;
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().slice(0, 10);
-}
-// Month bucketing for the "peak months" view — a separate, wider (12-month)
-// query from the 12-week one that feeds top models/locations/peak times/
-// dispute rate, since those are deliberately still scoped to recent activity.
-function monthKey(iso: string) {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-function monthLabel(key: string) {
-  const [y, m] = key.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('en-PH', { month: 'short', year: '2-digit' });
-}
-
+// The fixed 12-week window feeding top models/locations/dispute rate/funnel
+// is deliberately separate from the drill-down trend query below — those
+// summarize recent activity, not a browsable arbitrary period.
 async function fetchAnalytics() {
   const twelveWeeksAgo = new Date(Date.now() - 84 * 86_400_000).toISOString();
-  const twelveMonthsAgo = new Date(Date.now() - 365 * 86_400_000).toISOString();
 
-  const [{ data: bookings }, { data: yearBookings }, { count: totalBookings }, { count: accepted }, { count: paid }, { count: completed }, { count: activeVehicles }, { count: disputeCount }] =
+  const [{ data: bookings }, { count: totalBookings }, { count: accepted }, { count: paid }, { count: completed }, { count: activeVehicles }, { count: disputeCount }] =
     await Promise.all([
       supabase
         .from('bookings')
-        .select('created_at, commission, start_date, pickup_time, vehicle:vehicles(pickup_location, model:car_models(name, brand:car_brands(name)))')
+        .select('start_date, pickup_time, vehicle:vehicles(pickup_location, model:car_models(name, brand:car_brands(name)))')
         .gte('created_at', twelveWeeksAgo)
-        .order('created_at'),
-      supabase
-        .from('bookings')
-        .select('created_at, commission')
-        .gte('created_at', twelveMonthsAgo)
         .order('created_at'),
       supabase.from('bookings').select('*', { count: 'exact', head: true }),
       supabase.from('bookings').select('*', { count: 'exact', head: true }).not('status', 'in', '(pending_owner,owner_rejected,expired)'),
@@ -60,18 +33,11 @@ async function fetchAnalytics() {
       supabase.from('disputes').select('*', { count: 'exact', head: true }),
     ]);
 
-  const trend = new Map<string, { count: number; revenue: number }>();
   const modelCounts = new Map<string, number>();
   const locationCounts = new Map<string, number>();
   const peakTimeCounts = new Map<string, number>();
 
   for (const b of (bookings ?? []) as any[]) {
-    const key = weekKey(b.created_at);
-    const bucket = trend.get(key) ?? { count: 0, revenue: 0 };
-    bucket.count += 1;
-    bucket.revenue += Number(b.commission);
-    trend.set(key, bucket);
-
     const vehicle = b.vehicle;
     if (vehicle?.model) {
       const modelName = `${vehicle.model.brand?.name ?? ''} ${vehicle.model.name}`.trim();
@@ -92,32 +58,12 @@ async function fetchAnalytics() {
     return { day, hour, value };
   });
 
-  const sortedWeeks = [...trend.keys()].sort();
-  const bookingsTrendWeekly = sortedWeeks.map((k) => ({ label: weekStartLabel(k), value: trend.get(k)!.count }));
-  const revenueTrendWeekly = sortedWeeks.map((k) => ({ label: weekStartLabel(k), value: trend.get(k)!.revenue }));
-
-  const monthlyTrend = new Map<string, { count: number; revenue: number }>();
-  for (const b of (yearBookings ?? []) as { created_at: string; commission: number }[]) {
-    const key = monthKey(b.created_at);
-    const bucket = monthlyTrend.get(key) ?? { count: 0, revenue: 0 };
-    bucket.count += 1;
-    bucket.revenue += Number(b.commission);
-    monthlyTrend.set(key, bucket);
-  }
-  const sortedMonths = [...monthlyTrend.keys()].sort();
-  const bookingsTrendMonthly = sortedMonths.map((k) => ({ label: monthLabel(k), value: monthlyTrend.get(k)!.count }));
-  const revenueTrendMonthly = sortedMonths.map((k) => ({ label: monthLabel(k), value: monthlyTrend.get(k)!.revenue }));
-
   const topModels = [...modelCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([label, value]) => ({ label, value }));
   const topLocations = [...locationCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([label, value]) => ({ label, value }));
 
   const disputeRate = completed && completed > 0 ? Math.round(((disputeCount ?? 0) / completed) * 100) : 0;
 
   return {
-    bookingsTrendWeekly,
-    revenueTrendWeekly,
-    bookingsTrendMonthly,
-    revenueTrendMonthly,
     topModels,
     topLocations,
     peakTimes,
@@ -135,14 +81,35 @@ async function fetchAnalytics() {
   };
 }
 
+// Fetches only the rows inside the currently-viewed period (a day/week/
+// month, wherever the user has navigated to) rather than a fixed window —
+// the drill-down is browsable, so the query has to follow it.
+async function fetchTrend(granularity: TrendGranularity, reference: Date) {
+  const { start, end } = periodRange(granularity, reference);
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('created_at, commission')
+    .gte('created_at', start.toISOString())
+    .lt('created_at', end.toISOString());
+  if (error) throw error;
+
+  const rows = (data ?? []) as { created_at: string; commission: number }[];
+  return {
+    bookingsTrend: bucketByPeriod(rows, (r) => r.created_at, () => 1, granularity, reference),
+    revenueTrend: bucketByPeriod(rows, (r) => r.created_at, (r) => Number(r.commission), granularity, reference),
+  };
+}
+
 export function AdminAnalyticsPage() {
   const { data } = useQuery({ queryKey: ['admin-analytics'], queryFn: fetchAnalytics });
-  const [granularity, setGranularity] = useState<'week' | 'month'>('week');
+  const [granularity, setGranularity] = useState<TrendGranularity>('week');
+  const [reference, setReference] = useState(() => new Date());
+  const { data: trend } = useQuery({
+    queryKey: ['admin-trend', granularity, reference.toDateString()],
+    queryFn: () => fetchTrend(granularity, reference),
+  });
 
   if (!data) return <p className="text-muted">Loading…</p>;
-
-  const bookingsTrend = granularity === 'week' ? data.bookingsTrendWeekly : data.bookingsTrendMonthly;
-  const revenueTrend = granularity === 'week' ? data.revenueTrendWeekly : data.revenueTrendMonthly;
 
   const suggestions: { severity: 'info' | 'warn' | 'good'; text: string }[] = [];
   if (data.topLocationName && data.activeVehicles > 0 && data.topLocationCount >= 3) {
@@ -173,18 +140,17 @@ export function AdminAnalyticsPage() {
         <div className="mb-1.5 text-[11.5px] font-bold uppercase tracking-wide text-accent">Admin</div>
         <h1 className="text-2xl">Analytics</h1>
         <p className="mt-1.5 text-muted">
-          Top models/locations, dispute rate, and the funnel below cover the last 12 weeks. Bookings and revenue
-          trend charts can switch to a 12-month view to spot peak months.
+          Top models/locations, dispute rate, and the funnel below cover the last 12 weeks. The bookings and revenue
+          charts drill down by day, week, or month — use the controls below to browse any period.
         </p>
       </div>
 
       <AiInsights
         role="admin"
         stats={{
-          bookingsTrendByWeek: data.bookingsTrendWeekly,
-          revenueTrendByWeek: data.revenueTrendWeekly,
-          bookingsTrendByMonth: data.bookingsTrendMonthly,
-          revenueTrendByMonth: data.revenueTrendMonthly,
+          selectedPeriod: { granularity, label: periodLabel(granularity, reference) },
+          bookingsTrend: trend?.bookingsTrend ?? [],
+          revenueTrend: trend?.revenueTrend ?? [],
           topModels: data.topModels,
           topLocations: data.topLocations,
           funnel: data.funnel,
@@ -199,35 +165,29 @@ export function AdminAnalyticsPage() {
         </div>
       ) : null}
 
-      <div className="mb-3 flex items-center justify-end gap-1.5">
-        <button
-          className={`rounded-md px-2.5 py-1 text-xs font-bold ${granularity === 'week' ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:text-ink'}`}
-          onClick={() => setGranularity('week')}
-        >
-          By week
-        </button>
-        <button
-          className={`rounded-md px-2.5 py-1 text-xs font-bold ${granularity === 'month' ? 'bg-accent-soft text-accent-strong' : 'text-muted hover:text-ink'}`}
-          onClick={() => setGranularity('month')}
-        >
-          By month
-        </button>
-      </div>
+      <Card className="mb-5 p-5">
+        <PeriodNav granularity={granularity} reference={reference} onGranularityChange={setGranularity} onReferenceChange={setReference} />
+        <div className="grid grid-cols-2 gap-5">
+          <div>
+            <h3 className="mb-3 text-sm font-bold">Bookings</h3>
+            {trend && trend.bookingsTrend.some((p) => p.value > 0) ? (
+              <LineChart data={trend.bookingsTrend} />
+            ) : (
+              <p className="text-sm text-muted">No bookings in this period.</p>
+            )}
+          </div>
+          <div>
+            <h3 className="mb-3 text-sm font-bold">Commission revenue</h3>
+            {trend && trend.revenueTrend.some((p) => p.value > 0) ? (
+              <LineChart data={trend.revenueTrend} formatValue={(v) => formatCurrency(v)} />
+            ) : (
+              <p className="text-sm text-muted">No revenue in this period.</p>
+            )}
+          </div>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-2 gap-5">
-        <Card className="p-5">
-          <h3 className="mb-3 text-sm font-bold">Bookings per {granularity}</h3>
-          {bookingsTrend.length > 0 ? <LineChart data={bookingsTrend} /> : <p className="text-sm text-muted">Not enough data yet.</p>}
-        </Card>
-        <Card className="p-5">
-          <h3 className="mb-3 text-sm font-bold">Commission revenue per {granularity}</h3>
-          {revenueTrend.length > 0 ? (
-            <LineChart data={revenueTrend} formatValue={(v) => formatCurrency(v)} />
-          ) : (
-            <p className="text-sm text-muted">Not enough data yet.</p>
-          )}
-        </Card>
-
         <Card className="p-5">
           <h3 className="mb-3 text-sm font-bold">Top vehicle models</h3>
           <BarChart data={data.topModels} />
