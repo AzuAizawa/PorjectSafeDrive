@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth-context';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { MfaChallengeStep } from '@/components/mfa-challenge-step';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
 
 async function fetchMfaStatus() {
@@ -18,20 +20,25 @@ async function fetchMfaStatus() {
   };
 }
 
-// is_admin()/is_support_or_admin() (034_mandatory_mfa_for_staff.sql) now
-// require the current session to be aal2, not just the right role — a
-// staff account with no TOTP factor can never reach aal2, so gating the
-// whole admin/support shell on this forces enrollment as a side effect,
-// with no separate "has factors" check needed. Without this, staff would
-// just see "not authorized" errors on every admin action instead of a
-// clear reason why.
+// Mandatory authenticator-app enrollment for EVERY account, not just staff
+// — flipped from the earlier design (mandatory email code, optional TOTP)
+// per direct product feedback: an authenticator app should be the required
+// baseline, with email code demoted to a fallback for someone who already
+// enrolled but doesn't have their device right now (MfaChallengeStep,
+// allowEmailFallback). is_admin()/is_support_or_admin()
+// (034_mandatory_mfa_for_staff.sql) already required aal2 for staff before
+// this change; wrapping every role in this same gate (AppShell.tsx) means a
+// regular user's session also reaches real aal2 once they complete this,
+// even though no regular-user RLS policy currently requires it — that's a
+// deliberate no-op today, not a bug, and leaves room to extend aal2-gated
+// RLS to regular routes later without another migration.
 export function MandatoryMfaGate({ children }: { children: ReactNode }) {
+  const { profile } = useAuth();
+  const isStaff = profile?.role === 'admin' || profile?.role === 'support' || profile?.role === 'super_admin';
   const queryClient = useQueryClient();
   const [enrolling, setEnrolling] = useState<{ factorId: string; qrCode: string; secret: string } | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [usingRecoveryCode, setUsingRecoveryCode] = useState(false);
-  const [recoveryCode, setRecoveryCode] = useState('');
 
   const { data: status, isLoading } = useQuery({ queryKey: ['mfa-status'], queryFn: fetchMfaStatus });
 
@@ -61,36 +68,6 @@ export function MandatoryMfaGate({ children }: { children: ReactNode }) {
     onError: (e) => setError(friendlyErrorMessage(e)),
   });
 
-  const challenge = useMutation({
-    mutationFn: async () => {
-      const { error: challengeError } = await supabase.auth.mfa.challengeAndVerify({
-        factorId: status!.verifiedFactor!.id,
-        code,
-      });
-      if (challengeError) throw challengeError;
-    },
-    onSuccess: () => {
-      setCode('');
-      queryClient.invalidateQueries({ queryKey: ['mfa-status'] });
-    },
-    onError: (e) => setError(friendlyErrorMessage(e)),
-  });
-
-  const useRecoveryCode = useMutation({
-    mutationFn: async () => {
-      const { error: fnError } = await supabase.functions.invoke('verify-recovery-code', { body: { code: recoveryCode } });
-      if (fnError) throw fnError;
-    },
-    onSuccess: () => {
-      // Factor was deleted server-side — refetch flips us to the
-      // enrollment screen, same as a brand-new staff account sees.
-      setRecoveryCode('');
-      setUsingRecoveryCode(false);
-      queryClient.invalidateQueries({ queryKey: ['mfa-status'] });
-    },
-    onError: (e) => setError(friendlyErrorMessage(e)),
-  });
-
   if (isLoading) return <p className="p-8 text-muted">Loading…</p>;
   if (status?.isAal2) return <>{children}</>;
 
@@ -99,59 +76,18 @@ export function MandatoryMfaGate({ children }: { children: ReactNode }) {
       <Card className="w-full max-w-sm p-6">
         <h1 className="mb-2 text-xl font-bold">Two-factor authentication required</h1>
         <p className="mb-4 text-sm text-muted">
-          Admin and support accounts must use two-factor authentication. This can't be skipped or disabled while
-          your account has staff access.
+          {isStaff
+            ? "Admin and support accounts must use two-factor authentication. This can't be skipped or disabled while your account has staff access."
+            : 'Every SafeDrive account requires an authenticator app for sign-in. Set it up once below — it only takes a minute.'}
         </p>
 
-        {status?.verifiedFactor && !enrolling && usingRecoveryCode ? (
-          <div className="flex flex-col gap-3">
-            <label className="text-xs font-bold uppercase tracking-wide text-muted">Enter a backup code</label>
-            <input
-              className="input-base uppercase"
-              placeholder="XXXXX-XXXXX"
-              autoFocus
-              value={recoveryCode}
-              onChange={(e) => setRecoveryCode(e.target.value)}
-            />
-            {error ? <p className="text-sm text-bad">{error}</p> : null}
-            <Button disabled={!recoveryCode || useRecoveryCode.isPending} onClick={() => useRecoveryCode.mutate()}>
-              {useRecoveryCode.isPending ? 'Checking…' : 'Use Backup Code'}
-            </Button>
-            <p className="text-xs text-muted">
-              This resets your 2FA — you'll set up a new authenticator right after.
-            </p>
-            <button
-              type="button"
-              className="text-xs font-semibold text-muted hover:text-ink"
-              onClick={() => { setUsingRecoveryCode(false); setError(null); }}
-            >
-              ← Back to authenticator code
-            </button>
-          </div>
-        ) : status?.verifiedFactor && !enrolling ? (
-          <div className="flex flex-col gap-3">
-            <label className="text-xs font-bold uppercase tracking-wide text-muted">
-              Enter the 6-digit code from your authenticator app
-            </label>
-            <input
-              className="input-base"
-              maxLength={6}
-              autoFocus
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
-            {error ? <p className="text-sm text-bad">{error}</p> : null}
-            <Button disabled={code.length !== 6 || challenge.isPending} onClick={() => challenge.mutate()}>
-              {challenge.isPending ? 'Verifying…' : 'Verify'}
-            </Button>
-            <button
-              type="button"
-              className="text-xs font-semibold text-muted hover:text-ink"
-              onClick={() => { setUsingRecoveryCode(true); setError(null); }}
-            >
-              Lost your authenticator? Use a backup code
-            </button>
-          </div>
+        {status?.verifiedFactor && !enrolling ? (
+          <MfaChallengeStep
+            factorId={status.verifiedFactor.id}
+            onSuccess={() => queryClient.invalidateQueries({ queryKey: ['mfa-status'] })}
+            onBack={() => supabase.auth.signOut()}
+            allowEmailFallback={!isStaff}
+          />
         ) : enrolling ? (
           <div className="flex flex-col gap-3">
             {/* Supabase-generated SVG, not user input — safe to inject directly */}
@@ -179,6 +115,13 @@ export function MandatoryMfaGate({ children }: { children: ReactNode }) {
             <Button disabled={enroll.isPending} onClick={() => enroll.mutate()}>
               {enroll.isPending ? 'Setting up…' : 'Set Up Two-Factor Authentication'}
             </Button>
+            <button
+              type="button"
+              className="text-xs font-semibold text-muted hover:text-ink"
+              onClick={() => supabase.auth.signOut()}
+            >
+              ← Back to Sign In
+            </button>
           </div>
         )}
       </Card>

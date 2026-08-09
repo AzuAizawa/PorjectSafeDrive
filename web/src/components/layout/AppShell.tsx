@@ -204,5 +204,7 @@ export function AppShell() {
     </div>
   );
 
-  return isStaff ? <MandatoryMfaGate>{shell}</MandatoryMfaGate> : shell;
+  // Two-factor authentication is mandatory for every account, not just
+  // staff — see mandatory-mfa-gate.tsx for the full rationale.
+  return <MandatoryMfaGate>{shell}</MandatoryMfaGate>;
 }

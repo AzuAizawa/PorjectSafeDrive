@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Car, ShieldCheck, IdCard, CreditCard } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -8,8 +8,6 @@ import { PasswordInput, passwordMeetsRules } from '@/components/password-input';
 import { MfaChallengeStep } from '@/components/mfa-challenge-step';
 
 type Mode = 'login' | 'signup' | 'forgot';
-
-const DEFAULT_OTP_COOLDOWN_SECONDS = 45;
 
 function formatRetryAfter(seconds: number) {
   const minutes = Math.ceil(seconds / 60);
@@ -31,86 +29,17 @@ export function LoginPage() {
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  // Mandatory email-code 2FA (065_email_otp.sql) — the baseline every
-  // account has from the moment it's created, since there's no native
-  // Supabase "email" MFA factor type to lean on (see the migration's
-  // comment). Only reached when the account has no verified TOTP factor;
-  // an upgraded account skips straight to MfaChallengeStep instead.
-  const [emailOtpPending, setEmailOtpPending] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpCooldown, setOtpCooldown] = useState(0);
-  const [otpSubmitting, setOtpSubmitting] = useState(false);
-  const [otpResending, setOtpResending] = useState(false);
-  const [otpCooldownSetting, setOtpCooldownSetting] = useState(DEFAULT_OTP_COOLDOWN_SECONDS);
-
-  useEffect(() => {
-    if (!emailOtpPending) return;
-    supabase
-      .from('platform_settings')
-      .select('value')
-      .eq('key', 'email_otp_resend_cooldown_seconds')
-      .single()
-      .then(({ data }) => {
-        const seconds = Number(data?.value);
-        if (Number.isFinite(seconds) && seconds > 0) setOtpCooldownSetting(seconds);
-      });
-  }, [emailOtpPending]);
-
-  // Ticking countdown for the Resend button — reschedules itself each
-  // second rather than a single setInterval, so it can't drift out of sync
-  // with otpCooldown being set directly (e.g. from the server's own
-  // retry_after_seconds when a resend is blocked).
-  useEffect(() => {
-    if (otpCooldown <= 0) return;
-    const timer = setTimeout(() => setOtpCooldown((s) => Math.max(0, s - 1)), 1000);
-    return () => clearTimeout(timer);
-  }, [otpCooldown]);
-
-  // Shared tail for every successful login path (password-only, TOTP
-  // step-up, recovery code, or email code) — logs the Security Log entry
-  // and lands on "/" so LandingRedirect (App.tsx) can route by role.
+  // Shared tail for every successful login path (password-only or TOTP
+  // step-up) — logs the Security Log entry and lands on "/" so
+  // LandingRedirect (App.tsx) can route by role. An account with no
+  // enrolled authenticator yet lands here too — MandatoryMfaGate (inside
+  // AppShell) forces enrollment before showing anything else, for every
+  // role now, not just staff.
   function finishLogin() {
     void supabase.rpc('record_login_event').then(({ error }) => {
       if (error) console.warn('record_login_event failed:', error);
     });
     navigate('/');
-  }
-
-  async function handleOtpVerify(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setOtpSubmitting(true);
-    const { data: verified, error: verifyError } = await supabase.rpc('verify_email_otp', { p_code: otpCode });
-    setOtpSubmitting(false);
-    if (verifyError) { setError(verifyError.message); return; }
-    if (!verified) { setError('Incorrect code. Please try again.'); return; }
-    finishLogin();
-  }
-
-  // Lets a user who's upgraded to TOTP still fall back to the mandatory
-  // email-code baseline for a given login, without touching their
-  // authenticator enrollment — deliberately a plain function, not a
-  // useMutation, since success just swaps which screen renders next rather
-  // than needing its own pending UI (the email-code screen's own
-  // submitting/cooldown state takes over immediately after).
-  async function handleUseEmailCodeInstead() {
-    setError(null);
-    const { data: otpStatus, error: otpError } = await supabase.rpc('request_email_otp');
-    if (otpError) { setError(otpError.message); return; }
-    const status = otpStatus?.[0];
-    setOtpCooldown(status && !status.sent ? status.retry_after_seconds : otpCooldownSetting);
-    setMfaFactorId(null);
-    setEmailOtpPending(true);
-  }
-
-  async function handleResendOtp() {
-    setError(null);
-    setOtpResending(true);
-    const { data, error: otpError } = await supabase.rpc('request_email_otp');
-    setOtpResending(false);
-    if (otpError) { setError(otpError.message); return; }
-    const status = data?.[0];
-    setOtpCooldown(status && !status.sent ? status.retry_after_seconds : otpCooldownSetting);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -170,41 +99,22 @@ export function LoginPage() {
       return;
     }
 
-    // Password check passed — see if this account has upgraded to TOTP and
-    // still needs to step up to aal2 before the session is fully trusted.
+    // Password check passed. If this account already has a verified
+    // authenticator, challenge it right here (same pattern as
+    // /admin-login). If not, don't detour through anything else —
+    // MandatoryMfaGate forces enrollment as soon as AppShell mounts,
+    // for every role.
     const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    setSubmitting(false);
     if (level && level.nextLevel === 'aal2' && level.currentLevel !== level.nextLevel) {
       const { data: factors } = await supabase.auth.mfa.listFactors();
       const totp = factors?.totp[0];
       if (totp) {
-        setSubmitting(false);
         setMfaFactorId(totp.id);
         return;
       }
     }
-
-    // Staff with no TOTP factor yet (freshly invited, or just reset via the
-    // Admin Users "Reset 2FA" tool) skip the email-code detour entirely —
-    // MandatoryMfaGate (inside AppShell) already owns the full staff
-    // enroll/challenge flow, and staff never use email-OTP as their factor.
-    const { data: authUser } = await supabase.auth.getUser();
-    if (authUser.user) {
-      const { data: prof } = await supabase.from('profiles').select('role').eq('id', authUser.user.id).single();
-      if (prof && ['admin', 'support', 'super_admin'].includes(prof.role)) {
-        finishLogin();
-        return;
-      }
-    }
-
-    // No TOTP factor — every other account has mandatory email-code 2FA as
-    // its baseline (065_email_otp.sql), whether this is a brand-new
-    // signup's very first login or a returning user who never upgraded.
-    const { data: otpStatus, error: otpError } = await supabase.rpc('request_email_otp');
-    setSubmitting(false);
-    if (otpError) { setError(otpError.message); return; }
-    const status = otpStatus?.[0];
-    setOtpCooldown(status && !status.sent ? status.retry_after_seconds : otpCooldownSetting);
-    setEmailOtpPending(true);
+    finishLogin();
   }
 
   const done = signupSent || resetSent;
@@ -260,39 +170,9 @@ export function LoginPage() {
           <MfaChallengeStep
             factorId={mfaFactorId}
             onSuccess={finishLogin}
-            onUseEmailCode={handleUseEmailCodeInstead}
             onBack={() => setMfaFactorId(null)}
+            allowEmailFallback
           />
-        ) : emailOtpPending ? (
-          <form onSubmit={handleOtpVerify} className="flex flex-col gap-3.5">
-            <p className="text-sm text-muted">We emailed a 6-digit code to {email}. Enter it below to finish signing in.</p>
-            <input
-              className="h-[38px] w-full rounded-md border border-line bg-surface px-3"
-              maxLength={6}
-              autoFocus
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value)}
-            />
-            {error ? <p className="text-sm text-bad">{error}</p> : null}
-            <Button type="submit" block disabled={otpCode.length !== 6 || otpSubmitting}>
-              {otpSubmitting ? 'Verifying…' : 'Verify'}
-            </Button>
-            <button
-              type="button"
-              className="text-xs font-semibold text-muted hover:text-ink disabled:opacity-50"
-              disabled={otpCooldown > 0 || otpResending}
-              onClick={handleResendOtp}
-            >
-              {otpResending ? 'Sending…' : otpCooldown > 0 ? `Resend code (${otpCooldown}s)` : 'Resend code'}
-            </button>
-            <button
-              type="button"
-              className="text-xs font-semibold text-muted hover:text-ink"
-              onClick={() => { setEmailOtpPending(false); setOtpCode(''); setError(null); }}
-            >
-              ← Back to Sign In
-            </button>
-          </form>
         ) : signupSent ? (
           <div>
             <p className="text-sm text-muted">Check your email for a confirmation link before signing in.</p>
@@ -382,7 +262,7 @@ export function LoginPage() {
           </form>
         )}
 
-        {!done && !mfaFactorId && !emailOtpPending && mode !== 'forgot' ? (
+        {!done && !mfaFactorId && mode !== 'forgot' ? (
           <button
             className="mt-4 w-full text-center text-xs font-semibold text-muted hover:text-ink"
             onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
