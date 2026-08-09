@@ -146,6 +146,9 @@ export function CameraCapture({ label, onCapture, captured }: CameraCaptureProps
             <Button type="button" size="sm" className="absolute bottom-2 left-1/2 -translate-x-1/2" onClick={capture}>
               📸 Capture
             </Button>
+            <Button type="button" size="sm" variant="secondary" className="absolute bottom-2 right-2" onClick={stopCamera}>
+              Cancel
+            </Button>
           </div>
         ) : (
           <button

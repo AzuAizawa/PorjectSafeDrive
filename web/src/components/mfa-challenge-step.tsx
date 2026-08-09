@@ -17,10 +17,12 @@ export function MfaChallengeStep({
   factorId,
   onSuccess,
   onUseEmailCode,
+  onBack,
 }: {
   factorId: string;
   onSuccess: () => void;
   onUseEmailCode?: () => void;
+  onBack: () => void;
 }) {
   const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +76,9 @@ export function MfaChallengeStep({
         >
           ← Back to authenticator code
         </button>
+        <button type="button" className="text-xs font-semibold text-muted hover:text-ink" onClick={onBack}>
+          ← Back to Sign In
+        </button>
       </form>
     );
   }
@@ -104,6 +109,9 @@ export function MfaChallengeStep({
           onClick={() => { setUsingRecoveryCode(true); setError(null); }}
         >
           Lost your authenticator? Use a backup code
+        </button>
+        <button type="button" className="text-xs font-semibold text-muted hover:text-ink" onClick={onBack}>
+          ← Back to Sign In
         </button>
       </div>
     </form>

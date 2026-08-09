@@ -82,7 +82,7 @@ export function AdminLoginPage() {
         </div>
 
         {mfaFactorId ? (
-          <MfaChallengeStep factorId={mfaFactorId} onSuccess={finishLogin} />
+          <MfaChallengeStep factorId={mfaFactorId} onSuccess={finishLogin} onBack={() => setMfaFactorId(null)} />
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
             <p className="flex items-center gap-1.5 text-xs text-muted">

@@ -257,7 +257,12 @@ export function LoginPage() {
         </div>
 
         {mfaFactorId ? (
-          <MfaChallengeStep factorId={mfaFactorId} onSuccess={finishLogin} onUseEmailCode={handleUseEmailCodeInstead} />
+          <MfaChallengeStep
+            factorId={mfaFactorId}
+            onSuccess={finishLogin}
+            onUseEmailCode={handleUseEmailCodeInstead}
+            onBack={() => setMfaFactorId(null)}
+          />
         ) : emailOtpPending ? (
           <form onSubmit={handleOtpVerify} className="flex flex-col gap-3.5">
             <p className="text-sm text-muted">We emailed a 6-digit code to {email}. Enter it below to finish signing in.</p>
@@ -279,6 +284,13 @@ export function LoginPage() {
               onClick={handleResendOtp}
             >
               {otpResending ? 'Sending…' : otpCooldown > 0 ? `Resend code (${otpCooldown}s)` : 'Resend code'}
+            </button>
+            <button
+              type="button"
+              className="text-xs font-semibold text-muted hover:text-ink"
+              onClick={() => { setEmailOtpPending(false); setOtpCode(''); setError(null); }}
+            >
+              ← Back to Sign In
             </button>
           </form>
         ) : signupSent ? (
