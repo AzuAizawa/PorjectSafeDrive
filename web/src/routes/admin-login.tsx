@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { PasswordInput } from '@/components/password-input';
-import { MfaChallengeStep } from '@/components/mfa-challenge-step';
 
 // Staff-only entry point, separate from the consumer /login page per panel
 // feedback ("admin and user login should be different, so it's separated").
@@ -17,19 +16,19 @@ import { MfaChallengeStep } from '@/components/mfa-challenge-step';
 // forgot-password flow, and the admin surface isn't advertised inside the
 // public-facing login form. Not linked from any public nav on purpose.
 //
-// Staff always have a verified TOTP factor once fully enrolled (mandatory,
-// no email-OTP fallback for this role), so this page only ever needs the
-// TOTP challenge, never the email-code branch /login has for everyone else.
-// A staff account with NO factor yet (freshly invited, or just reset via
-// Admin Users) falls straight through to "/" — MandatoryMfaGate inside
-// AppShell owns first-time enrollment, no need to duplicate that here.
+// MandatoryMfaGate (inside AppShell) is the single place that checks AAL
+// and challenges/enrolls TOTP, for every role — this page (like /login)
+// used to duplicate that check and render its own inline MfaChallengeStep
+// right here, which meant two separate implementations of the same gate
+// could disagree about what to show (e.g. a stray code-entry screen after
+// pressing the browser Back button). Now this page only ever does password
+// auth and hands off to "/".
 export function AdminLoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
 
   function finishLogin() {
     void supabase.rpc('record_login_event').then(({ error }) => {
@@ -52,22 +51,11 @@ export function AdminLoginPage() {
 
     setSubmitting(true);
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    setSubmitting(false);
     if (authError) {
-      setSubmitting(false);
       void supabase.rpc('record_login_failure', { p_email: email });
       setError(authError.message);
       return;
-    }
-
-    const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    setSubmitting(false);
-    if (level && level.nextLevel === 'aal2' && level.currentLevel !== level.nextLevel) {
-      const { data: factors } = await supabase.auth.mfa.listFactors();
-      const totp = factors?.totp[0];
-      if (totp) {
-        setMfaFactorId(totp.id);
-        return;
-      }
     }
 
     finishLogin();
@@ -81,32 +69,28 @@ export function AdminLoginPage() {
           SafeDrive Staff Portal
         </div>
 
-        {mfaFactorId ? (
-          <MfaChallengeStep factorId={mfaFactorId} onSuccess={finishLogin} onBack={() => setMfaFactorId(null)} />
-        ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-            <p className="flex items-center gap-1.5 text-xs text-muted">
-              <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
-              Admin &amp; support access only.
-            </p>
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">Email</label>
-              <input
-                type="email"
-                required
-                autoFocus
-                className="h-[38px] w-full rounded-md border border-line bg-surface px-3"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <PasswordInput value={password} onChange={setPassword} />
-            {error ? <p className="text-sm text-bad">{error}</p> : null}
-            <Button type="submit" block disabled={submitting}>
-              {submitting ? 'Please wait…' : 'Sign In'}
-            </Button>
-          </form>
-        )}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+          <p className="flex items-center gap-1.5 text-xs text-muted">
+            <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
+            Admin &amp; support access only.
+          </p>
+          <div>
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">Email</label>
+            <input
+              type="email"
+              required
+              autoFocus
+              className="h-[38px] w-full rounded-md border border-line bg-surface px-3"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <PasswordInput value={password} onChange={setPassword} />
+          {error ? <p className="text-sm text-bad">{error}</p> : null}
+          <Button type="submit" block disabled={submitting}>
+            {submitting ? 'Please wait…' : 'Sign In'}
+          </Button>
+        </form>
       </Card>
     </div>
   );

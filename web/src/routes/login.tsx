@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { PasswordInput, passwordMeetsRules } from '@/components/password-input';
-import { MfaChallengeStep } from '@/components/mfa-challenge-step';
 
 type Mode = 'login' | 'signup' | 'forgot';
 
@@ -26,15 +25,12 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [signupSent, setSignupSent] = useState(false);
   const [resetSent, setResetSent] = useState(false);
-  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  // Shared tail for every successful login path (password-only or TOTP
-  // step-up) — logs the Security Log entry and lands on "/" so
-  // LandingRedirect (App.tsx) can route by role. An account with no
-  // enrolled authenticator yet lands here too — MandatoryMfaGate (inside
-  // AppShell) forces enrollment before showing anything else, for every
-  // role now, not just staff.
+  // Logs the Security Log entry and lands on "/" — MandatoryMfaGate (inside
+  // AppShell) is the single place that checks AAL and challenges/enrolls
+  // for every role now, so this runs unconditionally right after a
+  // successful password sign-in, whether or not MFA is still pending.
   function finishLogin() {
     void supabase.rpc('record_login_event').then(({ error }) => {
       if (error) console.warn('record_login_event failed:', error);
@@ -99,21 +95,7 @@ export function LoginPage() {
       return;
     }
 
-    // Password check passed. If this account already has a verified
-    // authenticator, challenge it right here (same pattern as
-    // /admin-login). If not, don't detour through anything else —
-    // MandatoryMfaGate forces enrollment as soon as AppShell mounts,
-    // for every role.
-    const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     setSubmitting(false);
-    if (level && level.nextLevel === 'aal2' && level.currentLevel !== level.nextLevel) {
-      const { data: factors } = await supabase.auth.mfa.listFactors();
-      const totp = factors?.totp[0];
-      if (totp) {
-        setMfaFactorId(totp.id);
-        return;
-      }
-    }
     finishLogin();
   }
 
@@ -166,14 +148,7 @@ export function LoginPage() {
           SafeDrive
         </div>
 
-        {mfaFactorId ? (
-          <MfaChallengeStep
-            factorId={mfaFactorId}
-            onSuccess={finishLogin}
-            onBack={() => setMfaFactorId(null)}
-            allowEmailFallback
-          />
-        ) : signupSent ? (
+        {signupSent ? (
           <div>
             <p className="text-sm text-muted">Check your email for a confirmation link before signing in.</p>
             <button
@@ -262,7 +237,7 @@ export function LoginPage() {
           </form>
         )}
 
-        {!done && !mfaFactorId && mode !== 'forgot' ? (
+        {!done && mode !== 'forgot' ? (
           <button
             className="mt-4 w-full text-center text-xs font-semibold text-muted hover:text-ink"
             onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}

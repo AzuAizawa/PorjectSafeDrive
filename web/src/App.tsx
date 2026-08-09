@@ -58,6 +58,19 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Inverse of RequireAuth, for /login and /admin-login. Without this, an
+// already-authenticated session (e.g. pressing the browser Back button right
+// after finishing login, which returns to /login's history entry) remounted
+// a blank/stale login form instead of just taking the user back into the
+// app — confusing at best, and on some paths left the last-rendered MFA
+// step visible for a session that had already passed it.
+function RedirectIfAuthenticated({ children }: { children: React.ReactNode }) {
+  const { session, loading } = useAuth();
+  if (loading) return <PageLoading />;
+  if (session) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 // Single source of truth for "where does this role land" — used both by the
 // index route and by every guard's redirect target, so they can never drift.
 // Super Admin lands on the same Dashboard as Admin/Support, since it now has
@@ -101,8 +114,8 @@ export default function App() {
   return (
     <Suspense fallback={<PageLoading />}>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/admin-login" element={<AdminLoginPage />} />
+        <Route path="/login" element={<RedirectIfAuthenticated><LoginPage /></RedirectIfAuthenticated>} />
+        <Route path="/admin-login" element={<RedirectIfAuthenticated><AdminLoginPage /></RedirectIfAuthenticated>} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
