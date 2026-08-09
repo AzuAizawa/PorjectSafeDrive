@@ -6,6 +6,7 @@ import { BarChart } from '@/components/charts/bar-chart';
 import { FunnelChart } from '@/components/charts/funnel-chart';
 import { HeatmapChart, type HeatmapCell } from '@/components/charts/heatmap-chart';
 import { SuggestionCard } from '@/components/charts/suggestion-card';
+import { AiInsights } from '@/components/charts/ai-insights';
 import { formatCurrency } from '@/lib/utils';
 
 function weekStartLabel(iso: string) {
@@ -137,6 +138,19 @@ export function AdminAnalyticsPage() {
         <h1 className="text-2xl">Analytics</h1>
         <p className="mt-1.5 text-muted">Trends and patterns across the last 12 weeks.</p>
       </div>
+
+      <AiInsights
+        role="admin"
+        stats={{
+          bookingsTrend: data.bookingsTrend,
+          revenueTrend: data.revenueTrend,
+          topModels: data.topModels,
+          topLocations: data.topLocations,
+          funnel: data.funnel,
+          activeVehicles: data.activeVehicles,
+          disputeRatePercent: data.disputeRate,
+        }}
+      />
 
       {suggestions.length > 0 ? (
         <div className="mb-5 flex flex-col gap-2">

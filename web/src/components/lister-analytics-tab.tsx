@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { LineChart } from '@/components/charts/line-chart';
 import { SuggestionCard } from '@/components/charts/suggestion-card';
+import { AiInsights } from '@/components/charts/ai-insights';
 import { HeatmapChart, type HeatmapCell } from '@/components/charts/heatmap-chart';
 import { formatCurrency } from '@/lib/utils';
 import type { Booking, CarBrand, CarModel, Vehicle } from '@/lib/database.types';
@@ -99,6 +100,20 @@ export function ListerAnalyticsTab({ ownerId }: { ownerId: string }) {
 
   return (
     <div>
+      <AiInsights
+        role="lister"
+        stats={{
+          overallRating: data.overallRating,
+          revenueTrend: data.revenueTrend,
+          vehicles: data.perVehicle.map((p) => ({
+            model: `${p.vehicle.model.brand.name} ${p.vehicle.model.name}`,
+            bookingsCount: p.bookingsCount,
+            revenue: p.revenue,
+            occupancyPercent: p.occupancy,
+          })),
+        }}
+      />
+
       {data.overallRating !== null ? (
         <Card className="mb-5 flex items-center justify-between p-5">
           <div>
