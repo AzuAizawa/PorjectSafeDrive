@@ -1,40 +1,59 @@
+import { lazy, Suspense, type ComponentType } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import { AppShell } from '@/components/layout/AppShell';
-import { LoginPage } from '@/routes/login';
-import { AdminLoginPage } from '@/routes/admin-login';
-import { ResetPasswordPage } from '@/routes/reset-password';
-import { BrowsePage } from '@/routes/browse';
-import { CarDetailPage } from '@/routes/car-detail';
-import { MyBookingsPage } from '@/routes/my-bookings';
-import { InvoicePage } from '@/routes/invoice';
-import { VerifyPage } from '@/routes/verify';
-import { ProfilePage } from '@/routes/profile';
-import { MyVehiclesPage } from '@/routes/my-vehicles';
-import { AddVehiclePage } from '@/routes/add-vehicle';
-import { EditVehiclePage } from '@/routes/edit-vehicle';
-import { BookingsReceivedPage } from '@/routes/bookings-received';
-import { AdminUsersPage } from '@/routes/admin/users';
-import { AdminVehiclesPage } from '@/routes/admin/vehicles';
-import { AdminCatalogPage } from '@/routes/admin/catalog';
-import { AdminDisputesPage } from '@/routes/admin/disputes';
-import { AdminPaymentsPage } from '@/routes/admin/payments';
-import { AdminAuditPage } from '@/routes/admin/audit';
-import { AdminSecurityLogPage } from '@/routes/admin/security-log';
-import { AdminSettingsPage } from '@/routes/admin/settings';
-import { AdminDashboardPage } from '@/routes/admin/dashboard';
-import { AdminAnalyticsPage } from '@/routes/admin/analytics';
-import { InquirePage } from '@/routes/inquire';
-import { HelpPage } from '@/routes/help';
-import { AdminCompanyInfoPage } from '@/routes/admin/company-info';
-import { AdminInquiriesPage } from '@/routes/admin/inquiries';
-import { AdminRoleManagementPage } from '@/routes/admin/role-management';
-import { PrivacyPage } from '@/routes/privacy';
-import { TermsPage } from '@/routes/terms';
+
+// Route-based code splitting — previously every one of these ~30 route
+// components was imported eagerly in this file, so a renter's first visit
+// downloaded the entire admin dashboard/analytics/audit/etc. bundle too
+// (and vice versa for a staff member logging into /admin-login). Each
+// named() helper below turns a named export into the default-export shape
+// React.lazy() requires, without having to touch 30 route files just to
+// add a `export default`.
+function named<T extends ComponentType<any>>(promise: Promise<Record<string, T>>, exportName: string) {
+  return promise.then((mod) => ({ default: mod[exportName] }));
+}
+
+const LoginPage = lazy(() => named(import('@/routes/login'), 'LoginPage'));
+const AdminLoginPage = lazy(() => named(import('@/routes/admin-login'), 'AdminLoginPage'));
+const ResetPasswordPage = lazy(() => named(import('@/routes/reset-password'), 'ResetPasswordPage'));
+const PrivacyPage = lazy(() => named(import('@/routes/privacy'), 'PrivacyPage'));
+const TermsPage = lazy(() => named(import('@/routes/terms'), 'TermsPage'));
+
+const BrowsePage = lazy(() => named(import('@/routes/browse'), 'BrowsePage'));
+const CarDetailPage = lazy(() => named(import('@/routes/car-detail'), 'CarDetailPage'));
+const MyBookingsPage = lazy(() => named(import('@/routes/my-bookings'), 'MyBookingsPage'));
+const InvoicePage = lazy(() => named(import('@/routes/invoice'), 'InvoicePage'));
+const VerifyPage = lazy(() => named(import('@/routes/verify'), 'VerifyPage'));
+const ProfilePage = lazy(() => named(import('@/routes/profile'), 'ProfilePage'));
+const MyVehiclesPage = lazy(() => named(import('@/routes/my-vehicles'), 'MyVehiclesPage'));
+const AddVehiclePage = lazy(() => named(import('@/routes/add-vehicle'), 'AddVehiclePage'));
+const EditVehiclePage = lazy(() => named(import('@/routes/edit-vehicle'), 'EditVehiclePage'));
+const BookingsReceivedPage = lazy(() => named(import('@/routes/bookings-received'), 'BookingsReceivedPage'));
+const InquirePage = lazy(() => named(import('@/routes/inquire'), 'InquirePage'));
+const HelpPage = lazy(() => named(import('@/routes/help'), 'HelpPage'));
+
+const AdminDashboardPage = lazy(() => named(import('@/routes/admin/dashboard'), 'AdminDashboardPage'));
+const AdminAnalyticsPage = lazy(() => named(import('@/routes/admin/analytics'), 'AdminAnalyticsPage'));
+const AdminUsersPage = lazy(() => named(import('@/routes/admin/users'), 'AdminUsersPage'));
+const AdminVehiclesPage = lazy(() => named(import('@/routes/admin/vehicles'), 'AdminVehiclesPage'));
+const AdminCatalogPage = lazy(() => named(import('@/routes/admin/catalog'), 'AdminCatalogPage'));
+const AdminDisputesPage = lazy(() => named(import('@/routes/admin/disputes'), 'AdminDisputesPage'));
+const AdminPaymentsPage = lazy(() => named(import('@/routes/admin/payments'), 'AdminPaymentsPage'));
+const AdminAuditPage = lazy(() => named(import('@/routes/admin/audit'), 'AdminAuditPage'));
+const AdminSecurityLogPage = lazy(() => named(import('@/routes/admin/security-log'), 'AdminSecurityLogPage'));
+const AdminSettingsPage = lazy(() => named(import('@/routes/admin/settings'), 'AdminSettingsPage'));
+const AdminCompanyInfoPage = lazy(() => named(import('@/routes/admin/company-info'), 'AdminCompanyInfoPage'));
+const AdminInquiriesPage = lazy(() => named(import('@/routes/admin/inquiries'), 'AdminInquiriesPage'));
+const AdminRoleManagementPage = lazy(() => named(import('@/routes/admin/role-management'), 'AdminRoleManagementPage'));
+
+function PageLoading() {
+  return <p className="p-8 text-muted">Loading…</p>;
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
-  if (loading) return <p className="p-8 text-muted">Loading…</p>;
+  if (loading) return <PageLoading />;
   if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
@@ -51,7 +70,7 @@ function homeRouteFor(role: string | undefined) {
 
 function LandingRedirect() {
   const { profile } = useAuth();
-  if (!profile) return <p className="p-8 text-muted">Loading…</p>;
+  if (!profile) return <PageLoading />;
   return <Navigate to={homeRouteFor(profile.role)} replace />;
 }
 
@@ -80,51 +99,53 @@ function RequireRenter({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/admin-login" element={<AdminLoginPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/privacy" element={<PrivacyPage />} />
-      <Route path="/terms" element={<TermsPage />} />
+    <Suspense fallback={<PageLoading />}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/admin-login" element={<AdminLoginPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
 
-      <Route
-        element={
-          <RequireAuth>
-            <AppShell />
-          </RequireAuth>
-        }
-      >
-        <Route index element={<LandingRedirect />} />
-        <Route path="browse" element={<RequireRenter><BrowsePage /></RequireRenter>} />
-        <Route path="cars/:id" element={<RequireRenter><CarDetailPage /></RequireRenter>} />
-        <Route path="bookings" element={<RequireRenter><MyBookingsPage /></RequireRenter>} />
-        <Route path="invoice/:bookingId" element={<RequireRenter><InvoicePage /></RequireRenter>} />
-        <Route path="verify" element={<RequireRenter><VerifyPage /></RequireRenter>} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="inquire" element={<InquirePage />} />
-        <Route path="help" element={<HelpPage />} />
+        <Route
+          element={
+            <RequireAuth>
+              <AppShell />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<LandingRedirect />} />
+          <Route path="browse" element={<RequireRenter><BrowsePage /></RequireRenter>} />
+          <Route path="cars/:id" element={<RequireRenter><CarDetailPage /></RequireRenter>} />
+          <Route path="bookings" element={<RequireRenter><MyBookingsPage /></RequireRenter>} />
+          <Route path="invoice/:bookingId" element={<RequireRenter><InvoicePage /></RequireRenter>} />
+          <Route path="verify" element={<RequireRenter><VerifyPage /></RequireRenter>} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="inquire" element={<InquirePage />} />
+          <Route path="help" element={<HelpPage />} />
 
-        <Route path="my-vehicles" element={<RequireRenter><MyVehiclesPage /></RequireRenter>} />
-        <Route path="my-vehicles/new" element={<RequireRenter><AddVehiclePage /></RequireRenter>} />
-        <Route path="my-vehicles/:id/edit" element={<RequireRenter><EditVehiclePage /></RequireRenter>} />
-        <Route path="bookings-received" element={<RequireRenter><BookingsReceivedPage /></RequireRenter>} />
+          <Route path="my-vehicles" element={<RequireRenter><MyVehiclesPage /></RequireRenter>} />
+          <Route path="my-vehicles/new" element={<RequireRenter><AddVehiclePage /></RequireRenter>} />
+          <Route path="my-vehicles/:id/edit" element={<RequireRenter><EditVehiclePage /></RequireRenter>} />
+          <Route path="bookings-received" element={<RequireRenter><BookingsReceivedPage /></RequireRenter>} />
 
-        <Route path="admin" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminDashboardPage /></RequireRole>} />
-        <Route path="admin/analytics" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminAnalyticsPage /></RequireRole>} />
-        <Route path="admin/users" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminUsersPage /></RequireRole>} />
-        <Route path="admin/vehicles" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminVehiclesPage /></RequireRole>} />
-        <Route path="admin/disputes" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminDisputesPage /></RequireRole>} />
-        <Route path="admin/inquiries" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminInquiriesPage /></RequireRole>} />
-        <Route path="admin/catalog" element={<RequireRole roles={['admin', 'super_admin']}><AdminCatalogPage /></RequireRole>} />
-        <Route path="admin/payments" element={<RequireRole roles={['admin', 'super_admin']}><AdminPaymentsPage /></RequireRole>} />
-        <Route path="admin/audit" element={<RequireRole roles={['admin', 'super_admin']}><AdminAuditPage /></RequireRole>} />
-        <Route path="admin/security-log" element={<RequireRole roles={['admin', 'super_admin']}><AdminSecurityLogPage /></RequireRole>} />
-        <Route path="admin/settings" element={<RequireRole roles={['admin', 'super_admin']}><AdminSettingsPage /></RequireRole>} />
-        <Route path="admin/company-info" element={<RequireRole roles={['admin', 'super_admin']}><AdminCompanyInfoPage /></RequireRole>} />
-        <Route path="admin/role-management" element={<RequireRole roles={['super_admin']}><AdminRoleManagementPage /></RequireRole>} />
-      </Route>
+          <Route path="admin" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminDashboardPage /></RequireRole>} />
+          <Route path="admin/analytics" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminAnalyticsPage /></RequireRole>} />
+          <Route path="admin/users" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminUsersPage /></RequireRole>} />
+          <Route path="admin/vehicles" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminVehiclesPage /></RequireRole>} />
+          <Route path="admin/disputes" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminDisputesPage /></RequireRole>} />
+          <Route path="admin/inquiries" element={<RequireRole roles={['support', 'admin', 'super_admin']}><AdminInquiriesPage /></RequireRole>} />
+          <Route path="admin/catalog" element={<RequireRole roles={['admin', 'super_admin']}><AdminCatalogPage /></RequireRole>} />
+          <Route path="admin/payments" element={<RequireRole roles={['admin', 'super_admin']}><AdminPaymentsPage /></RequireRole>} />
+          <Route path="admin/audit" element={<RequireRole roles={['admin', 'super_admin']}><AdminAuditPage /></RequireRole>} />
+          <Route path="admin/security-log" element={<RequireRole roles={['admin', 'super_admin']}><AdminSecurityLogPage /></RequireRole>} />
+          <Route path="admin/settings" element={<RequireRole roles={['admin', 'super_admin']}><AdminSettingsPage /></RequireRole>} />
+          <Route path="admin/company-info" element={<RequireRole roles={['admin', 'super_admin']}><AdminCompanyInfoPage /></RequireRole>} />
+          <Route path="admin/role-management" element={<RequireRole roles={['super_admin']}><AdminRoleManagementPage /></RequireRole>} />
+        </Route>
 
-      <Route path="*" element={<Navigate to="/browse" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/browse" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
