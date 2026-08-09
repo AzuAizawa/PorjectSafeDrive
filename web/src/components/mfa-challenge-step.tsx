@@ -7,7 +7,21 @@ import { Button } from '@/components/ui/button';
 // /admin-login (staff always have a verified TOTP factor per
 // MandatoryMfaGate/034_mandatory_mfa_for_staff.sql) — extracted so the two
 // pages don't duplicate this ~100-line block.
-export function MfaChallengeStep({ factorId, onSuccess }: { factorId: string; onSuccess: () => void }) {
+//
+// onUseEmailCode is deliberately optional and only ever passed by /login.
+// Staff must keep a real aal2 session (034_mandatory_mfa_for_staff.sql) and
+// email OTP is an app-layer-only check that never mints aal2 — offering it
+// on /admin-login would let a staff member route around the actual
+// enforcement mechanism, so it's omitted there on purpose.
+export function MfaChallengeStep({
+  factorId,
+  onSuccess,
+  onUseEmailCode,
+}: {
+  factorId: string;
+  onSuccess: () => void;
+  onUseEmailCode?: () => void;
+}) {
   const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -78,13 +92,20 @@ export function MfaChallengeStep({ factorId, onSuccess }: { factorId: string; on
       <Button type="submit" block disabled={mfaCode.length !== 6 || submitting}>
         {submitting ? 'Verifying…' : 'Verify'}
       </Button>
-      <button
-        type="button"
-        className="text-xs font-semibold text-muted hover:text-ink"
-        onClick={() => { setUsingRecoveryCode(true); setError(null); }}
-      >
-        Lost your authenticator? Use a backup code
-      </button>
+      <div className="flex flex-col gap-1.5">
+        {onUseEmailCode ? (
+          <button type="button" className="text-xs font-semibold text-muted hover:text-ink" onClick={onUseEmailCode}>
+            Use email code instead
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="text-xs font-semibold text-muted hover:text-ink"
+          onClick={() => { setUsingRecoveryCode(true); setError(null); }}
+        >
+          Lost your authenticator? Use a backup code
+        </button>
+      </div>
     </form>
   );
 }

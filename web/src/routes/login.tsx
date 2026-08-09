@@ -87,6 +87,22 @@ export function LoginPage() {
     finishLogin();
   }
 
+  // Lets a user who's upgraded to TOTP still fall back to the mandatory
+  // email-code baseline for a given login, without touching their
+  // authenticator enrollment — deliberately a plain function, not a
+  // useMutation, since success just swaps which screen renders next rather
+  // than needing its own pending UI (the email-code screen's own
+  // submitting/cooldown state takes over immediately after).
+  async function handleUseEmailCodeInstead() {
+    setError(null);
+    const { data: otpStatus, error: otpError } = await supabase.rpc('request_email_otp');
+    if (otpError) { setError(otpError.message); return; }
+    const status = otpStatus?.[0];
+    setOtpCooldown(status && !status.sent ? status.retry_after_seconds : otpCooldownSetting);
+    setMfaFactorId(null);
+    setEmailOtpPending(true);
+  }
+
   async function handleResendOtp() {
     setError(null);
     setOtpResending(true);
@@ -241,7 +257,7 @@ export function LoginPage() {
         </div>
 
         {mfaFactorId ? (
-          <MfaChallengeStep factorId={mfaFactorId} onSuccess={finishLogin} />
+          <MfaChallengeStep factorId={mfaFactorId} onSuccess={finishLogin} onUseEmailCode={handleUseEmailCodeInstead} />
         ) : emailOtpPending ? (
           <form onSubmit={handleOtpVerify} className="flex flex-col gap-3.5">
             <p className="text-sm text-muted">We emailed a 6-digit code to {email}. Enter it below to finish signing in.</p>
