@@ -10,19 +10,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { MultiSelectDropdown } from '@/components/ui/multi-select-dropdown';
 import { CITY_OPTIONS, cityLabel } from '@/lib/cities';
 import { formatCurrency } from '@/lib/utils';
-import type { CarBrand, CarModel, VehicleListing } from '@/lib/database.types';
-
-const BODY_TYPE_OPTIONS = [
-  { value: 'sedan', label: 'Sedan' },
-  { value: 'suv', label: 'SUV' },
-  { value: 'mpv', label: 'MPV' },
-  { value: 'pickup', label: 'Pickup' },
-  { value: 'hatchback', label: 'Hatchback' },
-  { value: 'van', label: 'Van' },
-  { value: 'coupe', label: 'Coupe' },
-  { value: 'convertible', label: 'Convertible' },
-  { value: 'wagon', label: 'Wagon' },
-];
+import type { CarBodyType, CarBrand, CarModel, VehicleListing } from '@/lib/database.types';
 
 async function fetchVehicles(startDate: string, endDate: string): Promise<VehicleListing[]> {
   let availableIds: string[] | null = null;
@@ -60,7 +48,13 @@ async function fetchCatalog() {
   if (e1) throw e1;
   const { data: models, error: e2 } = await supabase.from('car_models').select('*').order('name');
   if (e2) throw e2;
-  return { brands: brands as CarBrand[], models: models as CarModel[] };
+  const { data: bodyTypes, error: e3 } = await supabase.from('car_body_types').select('*').order('name');
+  if (e3) throw e3;
+  return { brands: brands as CarBrand[], models: models as CarModel[], bodyTypes: bodyTypes as CarBodyType[] };
+}
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function addDays(iso: string, days: number) {
@@ -86,6 +80,10 @@ export function BrowsePage() {
   });
   const { data: catalog } = useQuery({ queryKey: ['browse-catalog'], queryFn: fetchCatalog });
 
+  const bodyTypeOptions = useMemo(
+    () => (catalog?.bodyTypes ?? []).map((bt) => ({ value: bt.name, label: capitalize(bt.name) })),
+    [catalog]
+  );
   const brandOptions = useMemo(
     () => (catalog?.brands ?? []).map((b) => ({ value: b.id, label: b.name })),
     [catalog]
@@ -133,7 +131,7 @@ export function BrowsePage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <MultiSelectDropdown label="Body type" options={BODY_TYPE_OPTIONS} selected={bodyTypes} onChange={setBodyTypes} />
+          <MultiSelectDropdown label="Body type" options={bodyTypeOptions} selected={bodyTypes} onChange={setBodyTypes} />
           <MultiSelectDropdown label="Brand" options={brandOptions} selected={brandIds} onChange={setBrandIds} />
           <MultiSelectDropdown label="Model" options={modelOptions} selected={modelIds} onChange={setModelIds} />
           <MultiSelectDropdown label="City" options={[...CITY_OPTIONS]} selected={cities} onChange={setCities} />

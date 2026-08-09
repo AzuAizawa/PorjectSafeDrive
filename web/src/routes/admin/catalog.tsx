@@ -1,21 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { friendlyErrorMessage } from '@/lib/friendly-error';
-import type { BodyType, CarBrand, CarModel, FuelType } from '@/lib/database.types';
-
-const BODY_SEAT_DEFAULTS: Record<BodyType, number> = {
-  sedan: 5, coupe: 4, hatchback: 5, suv: 7, van: 12, pickup: 5, convertible: 4, wagon: 5, mpv: 7,
-};
+import type { BodyType, CarBodyType, CarBrand, CarModel, FuelType } from '@/lib/database.types';
 
 async function fetchCatalog() {
   const { data: brands, error: e1 } = await supabase.from('car_brands').select('*').order('name');
   if (e1) throw e1;
   const { data: models, error: e2 } = await supabase.from('car_models').select('*').order('name');
   if (e2) throw e2;
-  return { brands: brands as CarBrand[], models: models as CarModel[] };
+  const { data: bodyTypes, error: e3 } = await supabase.from('car_body_types').select('*').order('name');
+  if (e3) throw e3;
+  return { brands: brands as CarBrand[], models: models as CarModel[], bodyTypes: bodyTypes as CarBodyType[] };
 }
 
 export function AdminCatalogPage() {
@@ -23,7 +21,18 @@ export function AdminCatalogPage() {
   const { data } = useQuery({ queryKey: ['admin-catalog'], queryFn: fetchCatalog });
 
   const [newBrand, setNewBrand] = useState('');
-  const [form, setForm] = useState({ brand_id: '', name: '', body_type: 'sedan' as BodyType, seats: BODY_SEAT_DEFAULTS.sedan, fuel_type: 'gasoline' as FuelType });
+  const [newBodyType, setNewBodyType] = useState('');
+  const [newBodyTypeSeats, setNewBodyTypeSeats] = useState(5);
+  const [form, setForm] = useState({ brand_id: '', name: '', body_type: '' as BodyType, seats: 5, fuel_type: 'gasoline' as FuelType });
+
+  // Body types load asynchronously (no longer a hardcoded default like the
+  // old 'sedan' literal) — once the catalog arrives, default the Add Model
+  // form to the first one so the select isn't left empty.
+  useEffect(() => {
+    if (data?.bodyTypes.length && !form.body_type) {
+      setForm((f) => ({ ...f, body_type: data.bodyTypes[0].name, seats: data.bodyTypes[0].default_seats }));
+    }
+  }, [data?.bodyTypes, form.body_type]);
 
   const [actionError, setActionError] = useState<string | null>(null);
   const invalidate = () => {
@@ -38,6 +47,23 @@ export function AdminCatalogPage() {
       if (error) throw error;
     },
     onSuccess: () => { setNewBrand(''); invalidate(); },
+    onError: onActionError,
+  });
+
+  const addBodyType = useMutation({
+    mutationFn: async (vars: { name: string; default_seats: number }) => {
+      const { error } = await supabase.from('car_body_types').insert({ name: vars.name.toLowerCase(), default_seats: vars.default_seats });
+      if (error) throw error;
+    },
+    onSuccess: () => { setNewBodyType(''); setNewBodyTypeSeats(5); invalidate(); },
+    onError: onActionError,
+  });
+  const deleteBodyType = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('car_body_types').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
     onError: onActionError,
   });
 
@@ -79,7 +105,7 @@ export function AdminCatalogPage() {
         <p className="mb-4 rounded-md border border-bad bg-bad-soft p-3 text-sm text-bad">{actionError}</p>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-3 gap-5 max-[1000px]:grid-cols-1">
         <Card className="p-5">
           <h3 className="mb-3 text-sm font-bold">Brands</h3>
           <div className="mb-3 flex gap-2">
@@ -91,6 +117,45 @@ export function AdminCatalogPage() {
               <li key={b.id} className="flex items-center justify-between rounded-md border border-line px-3 py-2 text-sm">
                 {b.name}
                 <button className="text-xs text-bad" onClick={() => deleteBrand.mutate(b.id)}>Remove</button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        <Card className="p-5">
+          <h3 className="mb-3 text-sm font-bold">Body Types</h3>
+          <p className="mb-3 text-xs text-muted">
+            Used by Add Model below and shown as a filter on Browse — add a new one here first if a model doesn't
+            fit any existing type.
+          </p>
+          <div className="mb-3 flex gap-2">
+            <input
+              className="input-base"
+              placeholder="e.g. limousine"
+              value={newBodyType}
+              onChange={(e) => setNewBodyType(e.target.value)}
+            />
+            <input
+              type="number"
+              min={1}
+              className="input-base w-24"
+              placeholder="Seats"
+              value={newBodyTypeSeats}
+              onChange={(e) => setNewBodyTypeSeats(Number(e.target.value))}
+            />
+            <Button
+              size="sm"
+              disabled={!newBodyType || addBodyType.isPending}
+              onClick={() => addBodyType.mutate({ name: newBodyType, default_seats: newBodyTypeSeats })}
+            >
+              Add
+            </Button>
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {data?.bodyTypes.map((bt) => (
+              <li key={bt.id} className="flex items-center justify-between rounded-md border border-line px-3 py-2 text-sm capitalize">
+                {bt.name} <span className="tabular text-xs text-muted">{bt.default_seats} seats default</span>
+                <button className="text-xs text-bad" onClick={() => deleteBodyType.mutate(bt.id)}>Remove</button>
               </li>
             ))}
           </ul>
@@ -109,10 +174,11 @@ export function AdminCatalogPage() {
               value={form.body_type}
               onChange={(e) => {
                 const body_type = e.target.value as BodyType;
-                setForm((f) => ({ ...f, body_type, seats: BODY_SEAT_DEFAULTS[body_type] }));
+                const match = data?.bodyTypes.find((bt) => bt.name === body_type);
+                setForm((f) => ({ ...f, body_type, seats: match?.default_seats ?? f.seats }));
               }}
             >
-              {Object.keys(BODY_SEAT_DEFAULTS).map((bt) => <option key={bt} value={bt}>{bt}</option>)}
+              {data?.bodyTypes.map((bt) => <option key={bt.id} value={bt.name}>{bt.name}</option>)}
             </select>
             <input type="number" className="input-base" value={form.seats} onChange={(e) => setForm((f) => ({ ...f, seats: Number(e.target.value) }))} />
             <select className="input-base" value={form.fuel_type} onChange={(e) => setForm((f) => ({ ...f, fuel_type: e.target.value as FuelType }))}>

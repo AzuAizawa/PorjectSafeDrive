@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 const RULES = [
   { label: 'At least 8 characters', test: (v: string) => v.length >= 8 },
@@ -41,7 +42,7 @@ export function PasswordInput({ value, onChange, label = 'Password', showCheckli
           aria-label={visible ? 'Hide password' : 'Show password'}
           tabIndex={-1}
         >
-          {visible ? '🙈' : '👁️'}
+          {visible ? <EyeOff className="h-4 w-4" strokeWidth={2.25} /> : <Eye className="h-4 w-4" strokeWidth={2.25} />}
         </button>
       </div>
 

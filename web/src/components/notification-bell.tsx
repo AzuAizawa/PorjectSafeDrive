@@ -77,7 +77,7 @@ export function NotificationBell({ userId }: { userId: string }) {
       {open ? (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="glass animate-[dropdown-in_160ms_cubic-bezier(0.22,1,0.36,1)] absolute right-0 top-11 z-50 max-h-96 w-80 overflow-y-auto rounded-xl border border-line/70 shadow-xl">
+          <div className="glass scroll-visible animate-[dropdown-in_160ms_cubic-bezier(0.22,1,0.36,1)] absolute right-0 top-11 z-50 max-h-96 w-80 overflow-y-auto rounded-xl border border-line/70 shadow-xl">
             <div className="flex items-center justify-between border-b border-line/70 p-3">
               <span className="text-xs font-bold uppercase tracking-wide text-muted">Notifications</span>
               {unreadCount > 0 ? (

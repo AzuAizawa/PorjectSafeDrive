@@ -303,6 +303,15 @@ export function LoginPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+            {mode === 'forgot' ? (
+              <button
+                type="button"
+                className="-mb-1 self-start text-xs font-semibold text-muted hover:text-ink"
+                onClick={() => setMode('login')}
+              >
+                ← Back to Sign In
+              </button>
+            ) : null}
             <div>
               <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted">Email</label>
               <input
@@ -340,7 +349,11 @@ export function LoginPage() {
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
                 />
                 <span>
-                  I agree to the Terms of Service and{' '}
+                  I agree to the{' '}
+                  <a href="/terms" target="_blank" rel="noreferrer" className="font-semibold text-accent hover:underline">
+                    Terms of Service
+                  </a>{' '}
+                  and{' '}
                   <a href="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-accent hover:underline">
                     Data Privacy Notice
                   </a>
@@ -357,12 +370,12 @@ export function LoginPage() {
           </form>
         )}
 
-        {!done && !mfaFactorId && !emailOtpPending ? (
+        {!done && !mfaFactorId && !emailOtpPending && mode !== 'forgot' ? (
           <button
             className="mt-4 w-full text-center text-xs font-semibold text-muted hover:text-ink"
             onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
           >
-            {mode === 'signup' || mode === 'forgot' ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+            {mode === 'signup' ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
           </button>
         ) : null}
       </Card>

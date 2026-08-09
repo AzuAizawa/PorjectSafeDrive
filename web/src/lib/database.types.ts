@@ -4,7 +4,10 @@
 
 export type VerifiedStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
 export type AccountStatus = 'active' | 'suspended' | 'banned';
-export type BodyType = 'sedan' | 'suv' | 'hatchback' | 'van' | 'pickup' | 'coupe' | 'convertible' | 'wagon' | 'mpv';
+// A plain string, not a fixed union — body types are now an admin-editable
+// catalog (car_body_types, 066_car_body_type_catalog.sql), not a hardcoded
+// list, so the frontend can't know every possible value at compile time.
+export type BodyType = string;
 export type FuelType = 'gasoline' | 'diesel' | 'electric' | 'hybrid';
 export type Transmission = 'manual' | 'automatic';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
@@ -97,6 +100,13 @@ export interface VerificationSubmission {
 export interface CarBrand {
   id: string;
   name: string;
+  created_at: string;
+}
+
+export interface CarBodyType {
+  id: string;
+  name: string;
+  default_seats: number;
   created_at: string;
 }
 

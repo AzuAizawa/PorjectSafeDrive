@@ -120,7 +120,7 @@ export function AdminInquiriesPage() {
 
         {selectedId ? (
           <Card className="flex h-[560px] flex-col p-5">
-            <div className="flex-1 space-y-2.5 overflow-y-auto pr-1">
+            <div className="scroll-visible flex-1 space-y-2.5 overflow-y-auto pr-1">
               {messages?.map((m) => {
                 const isAdmin = m.sender_id === profile?.id;
                 return (

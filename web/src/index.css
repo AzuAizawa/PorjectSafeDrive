@@ -189,6 +189,24 @@ h1, h2, h3, h4 {
     @apply bg-surface/75 backdrop-blur-xl;
     box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset;
   }
+
+  /* An always-visible (not hover-only) scrollbar for short scrollable
+     panels — the default invisible-until-hover browser scrollbar gave no
+     signal that the notifications/inquiries lists were scrollable at all. */
+  .scroll-visible {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
+  .scroll-visible::-webkit-scrollbar {
+    width: 8px;
+  }
+  .scroll-visible::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-visible::-webkit-scrollbar-thumb {
+    background-color: var(--color-line);
+    border-radius: 9999px;
+  }
 }
 
 /* Hides the app chrome (topbar/sidebar, from AppShell.tsx's <header>/<aside>)

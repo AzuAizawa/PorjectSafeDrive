@@ -88,7 +88,7 @@ export function InquirePage() {
       </div>
 
       <Card className="flex h-[560px] max-w-2xl flex-col p-5">
-        <div className="flex-1 space-y-2.5 overflow-y-auto pr-1">
+        <div className="scroll-visible flex-1 space-y-2.5 overflow-y-auto pr-1">
           {messages?.length === 0 ? (
             <p className="py-16 text-center text-sm text-muted">
               Send a message and SafeDrive support will get back to you here.

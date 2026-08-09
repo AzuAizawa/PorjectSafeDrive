@@ -30,6 +30,7 @@ import { AdminCompanyInfoPage } from '@/routes/admin/company-info';
 import { AdminInquiriesPage } from '@/routes/admin/inquiries';
 import { AdminRoleManagementPage } from '@/routes/admin/role-management';
 import { PrivacyPage } from '@/routes/privacy';
+import { TermsPage } from '@/routes/terms';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -84,6 +85,7 @@ export default function App() {
       <Route path="/admin-login" element={<AdminLoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
 
       <Route
         element={

@@ -49,7 +49,7 @@ export function BookingChat({ bookingId, currentUserId }: { bookingId: string; c
 
   return (
     <div className="mt-3 rounded-md border border-line bg-surface-2 p-3">
-      <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+      <div className="scroll-visible max-h-48 space-y-2 overflow-y-auto pr-1">
         {messages?.length === 0 ? <p className="py-4 text-center text-xs text-muted">No messages yet — say hello.</p> : null}
         {messages?.map((m) => {
           const mine = m.sender_id === currentUserId;
