@@ -15,6 +15,11 @@ export function ThemeToggle() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    // shadcn/Radix components (added via the shadcn CLI) use a `.dark` class
+    // selector for their own dark-mode fine-tuning, separate from this
+    // app's [data-theme] attribute mechanism — set both so those components
+    // get correct dark styling too, not just the app's own hand-built ones.
+    document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
   function toggle() {

@@ -1,4 +1,10 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/*
+  ---break---
+*/
+@custom-variant dark (&:is(.dark *));
 
 /*
   Design tokens ported from docs/ui_prototype.html — keep these two files in
@@ -45,6 +51,44 @@
   --shadow-tint: 6, 148, 120;
   --glow-tint: 6, 148, 120;
   --glass-blur: 18px;
+
+  /* shadcn/Radix semantic tokens, aliased onto the app's own design tokens
+     above rather than shadcn's default generic oklch grayscale — so any
+     shadcn component (Dialog, Select, DropdownMenu, etc.) picks up this
+     app's actual teal/glass look instead of looking like a bolted-on
+     separate UI kit. Aliasing (not copying values) means these
+     automatically follow the same light/dark switching the aliased-to
+     tokens already have (prefers-color-scheme + the [data-theme] override
+     from ThemeToggle) with no separate dark-mode block needed here.
+     Note: shadcn's "accent" is a distinct concept (hover-state background)
+     from this app's own --color-accent (brand teal, already mapped further
+     below) — intentionally not the same value. */
+  --background: var(--color-paper);
+  --foreground: var(--color-ink);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-accent);
+  --primary-foreground: #ffffff;
+  --secondary: var(--color-surface-2);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-surface-2);
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-surface-2);
+  --accent-foreground: var(--color-ink);
+  --destructive: var(--color-bad);
+  --border: var(--color-line);
+  --input: var(--color-line);
+  --ring: var(--color-accent);
+  --sidebar: var(--color-surface);
+  --sidebar-foreground: var(--color-ink);
+  --sidebar-primary: var(--color-accent);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--color-surface-2);
+  --sidebar-accent-foreground: var(--color-ink);
+  --sidebar-border: var(--color-line);
+  --sidebar-ring: var(--color-accent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -118,6 +162,39 @@
 
   --font-ui: -apple-system, "Segoe UI", "Segoe UI Variable", system-ui, Roboto, "Helvetica Neue", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, Menlo, monospace;
+  --font-heading: var(--font-sans);
+  /* No external font loading, per the app's existing design decision —
+     shadcn components inherit the same system-ui stack as everything else. */
+  --font-sans: var(--font-ui);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  /* Deliberately no --radius-* overrides here — keeping Tailwind's stock
+     border-radius scale so new shadcn components (rounded-md, rounded-lg,
+     etc.) match the rounding already used throughout the app's existing
+     hand-built components, rather than introducing a second, slightly
+     different rounding scale side by side. */
 }
 
 * {
@@ -238,4 +315,19 @@ h1, h2, h3, h4 {
 @keyframes overlay-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+/*
+  This app's dark mode is driven by prefers-color-scheme + a [data-theme]
+  attribute override (ThemeToggle), never a `.dark` class — so unlike a
+  fresh shadcn project, there's no separate `.dark { ... }` token block
+  here. The tokens above already alias onto --color-paper/--color-ink/etc.,
+  which flip correctly under both mechanisms on their own.
+*/
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
 }
