@@ -51,7 +51,11 @@ export function MandatoryMfaGate({ children }: { children: ReactNode }) {
       // Clear any unverified leftovers first so re-enrollment always works.
       const { data: existing, error: listError } = await supabase.auth.mfa.listFactors();
       if (listError) throw listError;
-      for (const factor of existing.totp.filter((f) => f.status === 'unverified')) {
+      // listFactors() only returns verified factors in the per-type `totp`
+      // array (that's how @supabase/auth-js types it) -- unverified ones
+      // only show up in `all`, which is why the stale leftover has to be
+      // found there instead.
+      for (const factor of existing.all.filter((f) => f.factor_type === 'totp' && f.status === 'unverified')) {
         await supabase.auth.mfa.unenroll({ factorId: factor.id });
       }
       const { data, error: enrollError } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
