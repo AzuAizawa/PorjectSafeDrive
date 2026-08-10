@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { queryClient } from '@/lib/query-client';
 import type { Profile } from '@/lib/database.types';
 
 interface AuthContextValue {
@@ -36,6 +37,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      // The aal2 status from a previous session must never leak into a new
+      // one — react-query's client is a module-level singleton that survives
+      // sign-out/sign-in in the same tab, and 'mfa-status' has a 30s
+      // staleTime, so without this a just-verified TOTP result kept getting
+      // served straight back to MandatoryMfaGate on the very next login,
+      // skipping the challenge it exists to enforce.
+      queryClient.removeQueries({ queryKey: ['mfa-status'] });
       setSession(newSession);
       if (newSession) void loadProfile(newSession.user.id);
       else setProfile(null);

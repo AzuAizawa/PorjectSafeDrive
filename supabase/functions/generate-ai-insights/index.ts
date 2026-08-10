@@ -90,9 +90,19 @@ Respond with ONLY a JSON array, no other text, of objects shaped exactly like:
     const parsed = JSON.parse(rawText);
     insights = Array.isArray(parsed) ? parsed : [];
   } catch {
-    // Gemini occasionally wraps output despite responseMimeType — surface
-    // the raw text as a single insight rather than failing outright.
-    insights = rawText ? [{ severity: 'info', text: String(rawText).slice(0, 500) }] : [];
+    // Gemini occasionally wraps the array in a markdown code fence (```json
+    // ... ```) despite responseMimeType saying not to. Try to recover the
+    // actual array from inside the raw text before giving up — otherwise
+    // the fence (and everything else in rawText) got dumped as one
+    // 500-char-truncated "insight", cut off mid-sentence, instead of the
+    // real insights it was wrapping.
+    const match = typeof rawText === 'string' ? rawText.match(/\[[\s\S]*\]/) : null;
+    try {
+      const recovered = match ? JSON.parse(match[0]) : null;
+      insights = Array.isArray(recovered) ? recovered : [];
+    } catch {
+      insights = rawText ? [{ severity: 'info', text: String(rawText).slice(0, 500) }] : [];
+    }
   }
 
   return new Response(JSON.stringify({ insights }), {

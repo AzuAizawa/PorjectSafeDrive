@@ -44,6 +44,16 @@ export function MandatoryMfaGate({ children }: { children: ReactNode }) {
 
   const enroll = useMutation({
     mutationFn: async () => {
+      // enroll() always uses friendlyName "" (we never set one), so a factor
+      // left over from an abandoned attempt (closed tab, wrong code, etc.)
+      // collides on retry with "A factor with the friendly name '' already
+      // exists" and permanently locks the user out of finishing setup.
+      // Clear any unverified leftovers first so re-enrollment always works.
+      const { data: existing, error: listError } = await supabase.auth.mfa.listFactors();
+      if (listError) throw listError;
+      for (const factor of existing.totp.filter((f) => f.status === 'unverified')) {
+        await supabase.auth.mfa.unenroll({ factorId: factor.id });
+      }
       const { data, error: enrollError } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
       if (enrollError) throw enrollError;
       return data;
@@ -90,8 +100,18 @@ export function MandatoryMfaGate({ children }: { children: ReactNode }) {
           />
         ) : enrolling ? (
           <div className="flex flex-col gap-3">
-            {/* Supabase-generated SVG, not user input — safe to inject directly */}
-            <div className="w-40" dangerouslySetInnerHTML={{ __html: enrolling.qrCode }} />
+            {/* Supabase-generated SVG, not user input — safe to inject directly.
+                White background + padding + larger size: on a dark card the
+                bare SVG left too little quiet zone/contrast for phone cameras
+                to autofocus on reliably. shape-rendering:crispEdges: the raw
+                SVG is tiny at its intrinsic size, and the browser
+                anti-aliases module edges when scaling it up to fill the box
+                — soft edges read as low-contrast to a camera decoder,
+                especially off-angle, and slow the scan way down. */}
+            <div
+              className="w-64 rounded-md bg-white p-3 [&>svg]:[shape-rendering:crispEdges]"
+              dangerouslySetInnerHTML={{ __html: enrolling.qrCode }}
+            />
             <p className="text-xs text-muted">
               Scan this with your authenticator app, or enter the code manually:{' '}
               <code className="tabular rounded bg-surface-2 px-1.5 py-0.5">{enrolling.secret}</code>
